@@ -1,0 +1,517 @@
+import { useEffect, useMemo, useState } from 'react'
+import './App.css'
+import { ContractorForm, ContractorList } from './components/ContractorComponents'
+import { ExpenseList } from './components/ExpenseComponents'
+import { PaymentForm, PaymentList } from './components/PaymentComponents'
+import { ProjectForm, ProjectList } from './components/ProjectComponents'
+
+const API_BASE = 'http://localhost:8080/api/v1'
+const today = new Date().toISOString().slice(0, 10)
+
+function normalizeProject(project) {
+  return {
+    id: project.id,
+    name: project.name,
+    location: project.location || 'Location not set',
+    description: project.description || '',
+    estimated_amount: Number(project.estimated_amount || 0),
+    status: project.status || 'Planned',
+    start_date: project.start_date || today,
+    color: ['#e77b54', '#4ca68c', '#d2915d', '#5d9cc7'][project.id % 4] || '#e77b54',
+  }
+}
+
+function normalizeContractorSummary(item) {
+  return {
+    contractor_id: item.contractor_id,
+    contractor_name: item.contractor_name,
+    contract_amount: Number(item.contract_amount || 0),
+    total_paid: Number(item.total_paid || 0),
+    balance: Number(item.balance || 0),
+  }
+}
+
+function normalizePayment(item) {
+  const dateValue = item.payment_date || item.date || today
+  return {
+    id: item.id,
+    contractorId: item.contractor_id ?? item.contractorId,
+    projectId: item.project_id ?? item.projectId,
+    amount: Number(item.amount || 0),
+    note: item.notes || item.description || item.note || 'Payment received',
+    description: item.description || item.notes || item.note || 'Payment received',
+    date: String(dateValue).slice(0, 10),
+    payment_date: String(dateValue).slice(0, 10),
+    paymentMode: item.payment_mode || 'cash',
+  }
+}
+
+function money(amount) {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0)
+}
+
+function App() {
+  const [projects, setProjects] = useState([])
+  const [projectContractors, setProjectContractors] = useState([])
+  const [projectPayments, setProjectPayments] = useState([])
+  const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [modal, setModal] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [projectForm, setProjectForm] = useState({ name: '', location: '', mobile_number: '', description: '', estimated_amount: '', status: 'Planned', start_date: today })
+  const [contractorForm, setContractorForm] = useState({ name: '', company_name: '', phone: '', email: '', contract_amount: '', work_description: '' })
+  const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
+  const [paymentForm, setPaymentForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: 'cash', note: '' })
+
+  async function loadProjects() {
+    try {
+      const response = await fetch(`${API_BASE}/projects`)
+      if (!response.ok) throw new Error('Projects could not be loaded')
+      const data = await response.json()
+      const formatted = (data || []).map(normalizeProject)
+      setProjects(formatted)
+      if (!selectedProjectId && formatted[0]) {
+        setSelectedProjectId(formatted[0].id)
+      }
+    } catch (loadError) {
+      setError(loadError.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function loadProjectDetails(projectId) {
+    if (!projectId) return
+
+    try {
+      const summaryResponse = await fetch(`${API_BASE}/projects/${projectId}/summary`)
+      if (!summaryResponse.ok) throw new Error('Project details could not be loaded')
+      const summary = await summaryResponse.json()
+      const contractors = (summary.contractors || []).map(normalizeContractorSummary)
+      setProjectContractors(contractors)
+
+      const paymentResponses = await Promise.all(
+        contractors.map(async (contractor) => {
+          const detailResponse = await fetch(`${API_BASE}/projects/${projectId}/contractors/${contractor.contractor_id}/payment-summary`)
+          if (!detailResponse.ok) return []
+          const detail = await detailResponse.json()
+          return (detail.payments || []).map(normalizePayment)
+        }),
+      )
+
+      setProjectPayments(paymentResponses.flat())
+    } catch (detailError) {
+      setError(detailError.message)
+    }
+  }
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      loadProjectDetails(selectedProjectId)
+    }
+  }, [selectedProjectId])
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0] || null
+  const projectReceived = projectPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+  const totalSpend = projectPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+  const projectBalance = Math.max((selectedProject?.estimated_amount || 0) - projectReceived, 0)
+  const projectInitials = useMemo(() => selectedProject?.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase() || '', [selectedProject])
+
+  function exportProjectReport() {
+    if (!selectedProject) return
+
+    const incomingEntries = [...projectPayments]
+      .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
+      .map((payment) => ({
+        date: payment.date || payment.payment_date || today,
+        description: payment.description || payment.note || 'Payment received',
+        amount: Number(payment.amount || 0),
+      }))
+
+    const contractorEntries = [...projectPayments]
+      .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
+      .map((payment) => {
+        const contractor = projectContractors.find((item) => item.contractor_id === payment.contractorId)
+        return {
+          date: payment.date || payment.payment_date || today,
+          contractorName: contractor?.contractor_name || 'Unknown contractor',
+          description: payment.description || payment.note || 'Contractor payment',
+          amount: Number(payment.amount || 0),
+        }
+      })
+
+    const incomingTotal = incomingEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+    const outgoingTotal = contractorEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+
+    const formatCurrency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
+    const formatDate = (value) => {
+      if (!value) return '—'
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return value
+      return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
+    }
+
+    const incomingRows = incomingEntries.length
+      ? incomingEntries.map((entry) => `
+          <tr>
+            <td>${formatDate(entry.date)}</td>
+            <td>${entry.description}</td>
+            <td>${formatCurrency(entry.amount)}</td>
+          </tr>`).join('')
+      : `
+          <tr>
+            <td colspan="3" class="empty">No incoming payments recorded yet</td>
+          </tr>`
+
+    const contractorRows = contractorEntries.length
+      ? contractorEntries.map((entry) => `
+          <tr>
+            <td>${formatDate(entry.date)}</td>
+            <td>${entry.contractorName}</td>
+            <td>${entry.description}</td>
+            <td>${formatCurrency(entry.amount)}</td>
+          </tr>`).join('')
+      : `
+          <tr>
+            <td colspan="4" class="empty">No contractor payments recorded yet</td>
+          </tr>`
+
+    const reportHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${selectedProject.name} - Project Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 0; background: #fff; color: #1f1f1f; }
+            .report-page { max-width: 980px; margin: 0 auto; padding: 40px 32px 48px; }
+            .header { border-bottom: 2px solid #e77b54; padding-bottom: 18px; margin-bottom: 24px; }
+            .eyebrow { text-transform: uppercase; letter-spacing: 1.8px; color: #7d766d; font-size: 11px; }
+            h1 { font-size: 28px; margin: 8px 0 6px; }
+            .meta { color: #5f5a54; font-size: 13px; }
+            .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 26px 0 30px; }
+            .card { border: 1px solid #e8e0d8; border-radius: 8px; padding: 16px; background: #fffaf6; }
+            .label { color: #756f68; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+            .value { font-size: 22px; font-weight: 700; margin-top: 8px; }
+            .section { margin-top: 32px; }
+            .section h2 { font-size: 20px; margin: 0 0 12px; border-bottom: 1px solid #e7e1d9; padding-bottom: 8px; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            th, td { padding: 11px 10px; border-bottom: 1px solid #efe9e3; text-align: left; vertical-align: top; }
+            th { background: #f5f1ec; color: #524f4a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.9px; }
+            td.amount { text-align: right; font-weight: 700; }
+            .empty { color: #726d68; font-style: italic; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="report-page">
+            <div class="header">
+              <div class="eyebrow">Project report</div>
+              <h1>${selectedProject.name}</h1>
+              <div class="meta">${selectedProject.location || 'Location not set'} • ${selectedProject.status || 'Planned'} • ${formatDate(selectedProject.start_date || today)}</div>
+            </div>
+
+            <div class="summary-grid">
+              <div class="card">
+                <div class="label">Project estimate</div>
+                <div class="value">${formatCurrency(selectedProject.estimated_amount || 0)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Received from owner</div>
+                <div class="value">${formatCurrency(incomingTotal)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Paid to contractors</div>
+                <div class="value">${formatCurrency(outgoingTotal)}</div>
+              </div>
+            </div>
+
+            <div class="section">
+              <h2>1) Payments received for project</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th class="amount">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${incomingRows}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="section">
+              <h2>2) Payments made to contractors</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Contractor</th>
+                    <th>Description</th>
+                    <th class="amount">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${contractorRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+
+    const printWindow = window.open('', '_blank', 'width=1000,height=800')
+    if (!printWindow) {
+      setError('Popup blocked. Please allow popups to export the project report.')
+      return
+    }
+
+    printWindow.document.write(reportHtml)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+  }
+
+  async function addProject(event) {
+    event.preventDefault()
+    if (!projectForm.name.trim() || !projectForm.location.trim()) return
+
+    try {
+      const payload = {
+        name: projectForm.name.trim(),
+        description: projectForm.description.trim(),
+        location: projectForm.location.trim() || 'Location not set',
+        mobile_number: projectForm.mobile_number.trim(),
+        estimated_amount: Number(projectForm.estimated_amount || 0),
+        status: projectForm.status || 'Planned',
+        start_date: projectForm.start_date ? new Date(projectForm.start_date).toISOString() : new Date().toISOString(),
+      }
+
+      const response = await fetch(`${API_BASE}/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to create project' } }))
+        throw new Error(errorBody.error?.message || 'Unable to create project')
+      }
+
+      const createdProject = await response.json()
+      const normalized = normalizeProject(createdProject)
+      setProjects((current) => [normalized, ...current])
+      setSelectedProjectId(normalized.id)
+      setProjectForm({ name: '', location: '', mobile_number: '', description: '', estimated_amount: '', status: 'Planned', start_date: today })
+      setModal(null)
+      setError('')
+    } catch (createError) {
+      setError(createError.message)
+    }
+  }
+
+  async function addContractor(event) {
+    event.preventDefault()
+    if (!selectedProject || !contractorForm.name.trim()) return
+
+    try {
+      const contractorPayload = {
+        name: contractorForm.name.trim(),
+        company_name: contractorForm.company_name.trim(),
+        phone: contractorForm.phone.trim(),
+        email: contractorForm.email.trim(),
+        address: '',
+        gst_number: '',
+        notes: contractorForm.work_description.trim(),
+      }
+
+      const contractorResponse = await fetch(`${API_BASE}/contractors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contractorPayload),
+      })
+
+      if (!contractorResponse.ok) {
+        const errorBody = await contractorResponse.json().catch(() => ({ error: { message: 'Unable to add contractor' } }))
+        throw new Error(errorBody.error?.message || 'Unable to add contractor')
+      }
+
+      const contractor = await contractorResponse.json()
+      const associationPayload = {
+        contract_amount: Number(contractorForm.contract_amount || 0),
+        work_description: contractorForm.work_description.trim(),
+      }
+
+      const associationResponse = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractor.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(associationPayload),
+      })
+
+      if (!associationResponse.ok) {
+        const errorBody = await associationResponse.json().catch(() => ({ error: { message: 'Unable to assign contractor to project' } }))
+        throw new Error(errorBody.error?.message || 'Unable to assign contractor to project')
+      }
+
+      setContractorForm({ name: '', company_name: '', phone: '', email: '', contract_amount: '', work_description: '' })
+      setModal(null)
+      setError('')
+      await loadProjectDetails(selectedProject.id)
+    } catch (createError) {
+      setError(createError.message)
+    }
+  }
+
+  async function addPayment(event) {
+    event.preventDefault()
+    if (!selectedProject || !paymentForm.contractorId || !paymentForm.amount) return
+
+    try {
+      const payload = {
+        amount: Number(paymentForm.amount || 0),
+        payment_date: new Date(paymentForm.date).toISOString(),
+        description: paymentForm.note.trim() || 'Payment received',
+        payment_mode: paymentForm.paymentMode || 'cash',
+        reference_number: '',
+        notes: paymentForm.note.trim() || 'Payment received',
+      }
+
+      const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${paymentForm.contractorId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to save payment' } }))
+        throw new Error(errorBody.error?.message || 'Unable to save payment')
+      }
+
+      setPaymentForm({ contractorId: '', amount: '', date: today, paymentMode: 'cash', note: '' })
+      setModal(null)
+      setError('')
+      await loadProjectDetails(selectedProject.id)
+    } catch (createError) {
+      setError(createError.message)
+    }
+  }
+
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <div className="brand"><span className="brand-mark">$</span><span>costrack</span></div>
+      <div className="side-label">Workspace</div>
+      <button type="button" className="nav-item active"><span>◈</span>Overview</button>
+      <button type="button" className="nav-item" onClick={() => setModal('project')}><span>▦</span>Projects <b>+</b></button>
+      <button type="button" className="nav-item"><span>♧</span>Contractors</button>
+      <div className="sidebar-bottom">
+        <div className="side-label">Your workspace</div>
+        <div className="profile">
+          <span className="avatar dark">AS</span>
+          <span><strong>Alex Smith</strong><small>Administrator</small></span>
+          <span className="dots">•••</span>
+        </div>
+      </div>
+    </aside>
+
+    <main className="main-content">
+      <header className="topbar">
+        <div>
+          <span className="eyebrow">Tuesday, September 1, 2026</span>
+          <h1>Good morning, Alex <span>✦</span></h1>
+        </div>
+        <div className="top-actions">
+          <button type="button" className="icon-button" aria-label="Notifications">♧<i /></button>
+          <button type="button" className="avatar coral">AS</button>
+        </div>
+      </header>
+
+      {error && <div className="error-banner">{error}</div>}
+
+      <section className="summary-grid">
+        <div className="summary-card warm"><span>Total spend</span><strong>{money(totalSpend)}</strong><small><em>↗ 12.4%</em> from last month</small></div>
+        <div className="summary-card"><span>Active projects</span><strong>{projects.length}</strong><small><em className="green">●</em> All projects on track</small></div>
+        <div className="summary-card"><span>Contractors</span><strong>{projectContractors.length}</strong><small><em className="blue">●</em> Across your projects</small></div>
+      </section>
+
+      <div className="workspace-heading">
+        <div>
+          <span className="eyebrow">Project workspace</span>
+          <h2>Projects <span className="count">{projects.length}</span></h2>
+        </div>
+        <button type="button" className="primary-button" onClick={() => setModal('project')}>+ New project</button>
+      </div>
+
+      <section className="project-layout">
+        <ProjectList projects={projects} selectedProjectId={selectedProject?.id} onSelect={setSelectedProjectId} onCreate={() => setModal('project')} />
+
+        {selectedProject && <div className="detail-panel">
+          <div className="detail-header">
+            <div className="detail-title">
+              <span className="large-project-icon" style={{ background: selectedProject.color }}>{projectInitials}</span>
+              <div>
+                <span className="eyebrow">Selected project</span>
+                <h2>{selectedProject.name}</h2>
+                <p>{selectedProject.location}</p>
+              </div>
+            </div>
+            <button type="button" className="more-button">•••</button>
+          </div>
+
+          <div className="detail-stats">
+            <div><span>Project estimate</span><strong>{money(selectedProject.estimated_amount || 0)}</strong></div>
+            <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
+            <div><span>Balance due</span><strong>{money(projectBalance)}</strong></div>
+          </div>
+
+          <div className="section-head">
+            <div>
+              <h3>Contractors & Expenses <span className="count">{projectContractors.length}</span></h3>
+              <p>People assigned to this project</p>
+            </div>
+            <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Add contractor</button>
+          </div>
+          <ContractorList contractors={projectContractors} />
+
+          <div className="section-head expense-heading">
+            <div>
+              <h3>Received payments <span className="count">{projectPayments.length}</span></h3>
+              <p>Installments received from the client</p>
+            </div>
+            <div className="section-actions">
+              <button type="button" className="outline-button" onClick={exportProjectReport}>Export PDF</button>
+              <button type="button" className="outline-button" onClick={() => setModal('payment')}>+ Add payment</button>
+            </div>
+          </div>
+          <PaymentList payments={projectPayments} />
+        </div>}
+      </section>
+    </main>
+
+    {modal === 'project' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={addProject} close={() => setModal(null)} />}
+    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} />}
+    {modal === 'expense' && <ExpenseForm projectName={selectedProject?.name} contractors={projectContractors} form={expenseForm} setForm={setExpenseForm} onSubmit={(event) => {
+      event.preventDefault()
+      if (!selectedProject || !expenseForm.contractorId || !expenseForm.amount) return
+      setPaymentForm({
+        contractorId: expenseForm.contractorId,
+        amount: expenseForm.amount,
+        date: today,
+        paymentMode: 'cash',
+        note: expenseForm.description,
+      })
+      setModal('payment')
+      setExpenseForm({ contractorId: '', amount: '', description: '' })
+    }} close={() => setModal(null)} />}
+    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} contractors={projectContractors} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} />}
+
+    {isLoading && <div className="loading-indicator">Loading projects...</div>}
+  </div>
+}
+
+export default App

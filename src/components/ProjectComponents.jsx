@@ -1,0 +1,40 @@
+import Modal from './Modal'
+
+export function ProjectList({ projects, selectedProjectId, onSelect, onCreate }) {
+  return <div className="project-list">
+    {projects.map((project) => <button key={project.id} className={`project-row ${project.id === selectedProjectId ? 'selected' : ''}`} onClick={() => onSelect(project.id)}>
+      <span className="project-icon" style={{ background: project.color || '#e77b54' }}>{(project.name || 'P').split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase()}</span>
+      <span className="project-info"><strong>{project.name}</strong><small>{project.location || 'Location not set'}</small></span>
+      <span className="arrow">›</span>
+    </button>)}
+    <button type="button" className="add-project-row" onClick={onCreate}>+ Add another project</button>
+  </div>
+}
+
+export function ProjectForm({ form, setForm, onSubmit, close }) {
+  return <Modal title="New project" eyebrow="Workspace" close={close} onSubmit={onSubmit}>
+    <label>Project name<input required autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Oak Street build" /></label>
+    <label>Location<input required value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="e.g. Bengaluru" /></label>
+    <label>
+  Mobile number
+  <input
+    type="tel"
+    value={form.mobile_number}
+    onChange={(event) =>
+      setForm({
+        ...form,
+        mobile_number: event.target.value.replace(/\D/g, '').slice(0, 10),
+      })
+    }
+    placeholder="e.g. 9876543210"
+    maxLength={10}
+    inputMode="numeric"
+  />
+</label>
+    <label>Project estimate<input type="number" min="0" step="500" value={form.estimated_amount} onChange={(event) => setForm({ ...form, estimated_amount: event.target.value })} placeholder="e.g. 1000000" /></label>
+    <label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option><option value="On Hold">On Hold</option></select></label>
+    <label>Start date<input type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} /></label>
+    <label>Description </label><textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Project summary or scope" rows="3" style={{ width: '100%' }} />
+    <button type="submit" className="primary-button full">Create project</button>
+  </Modal>
+}
