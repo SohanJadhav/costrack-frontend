@@ -26,7 +26,7 @@ export function ContractorList({ contractors }) {
             <span>
               <strong>{contractor.contractor_name}</strong>
               <small>
-                {money(contractor.contract_amount)} contract
+                {money(contractor.total_paid || 0)} paid
               </small>
             </span>
 
@@ -49,6 +49,7 @@ export function ContractorList({ contractors }) {
 
 export function ContractorForm({
   projectName,
+  contractors,
   form,
   setForm,
   onSubmit,
@@ -56,26 +57,21 @@ export function ContractorForm({
 }) {
   return (
     <Modal
-      title="Add contractor expense"
+      title="Pay contractor"
       eyebrow={projectName}
       close={close}
       onSubmit={onSubmit}
     >
       <p className="modal-intro">
-        Record a payment or expense made to the contractor.
+        Record a payment made to a contractor for this project.
       </p>
 
       <label>
-        Contractor name *
-        <input
-          autoFocus
-          required
-          value={form.name}
-          onChange={(event) =>
-            setForm({ ...form, name: event.target.value })
-          }
-          placeholder="e.g. Sam Rivera"
-        />
+        Contractor *
+        <select required autoFocus value={form.contractorId} onChange={(event) => setForm({ ...form, contractorId: event.target.value })}>
+          <option value="">Select contractor</option>
+          {contractors.map((contractor) => <option key={contractor.id} value={contractor.id}>{contractor.name}</option>)}
+        </select>
       </label>
 
       <label>
@@ -84,11 +80,11 @@ export function ContractorForm({
           type="number"
           required
           min="0"
-          value={form.contract_amount}
+          value={form.amount}
           onChange={(event) =>
             setForm({
               ...form,
-              contract_amount: event.target.value,
+              amount: event.target.value,
             })
           }
           placeholder="e.g. 250000"
@@ -116,26 +112,26 @@ export function ContractorForm({
 
       <textarea
         required
-        value={form.work_description}
+        value={form.description}
         onChange={(event) =>
           setForm({
             ...form,
-            work_description: event.target.value,
+            description: event.target.value,
           })
         }
         rows="3"
-        placeholder="Describe the work or expense"
+        placeholder="Describe the work or payment"
         style={{ width: '100%' }}
       />
 
       <label>
-        Company name
+        Firm name
         <input
-          value={form.company_name}
+          value={form.firm_name}
           onChange={(event) =>
             setForm({
-              ...form,
-              company_name: event.target.value,
+                ...form,
+                firm_name: event.target.value,
             })
           }
           placeholder="e.g. Rivera Build Works"
@@ -143,36 +139,11 @@ export function ContractorForm({
       </label>
 
       <label>
-        Phone
+        Firm address
         <input
-          type="tel"
-          inputMode="numeric"
-          maxLength={10}
-          value={form.phone}
-          onChange={(event) =>
-            setForm({
-              ...form,
-              phone: event.target.value
-                .replace(/\D/g, '')
-                .slice(0, 10),
-            })
-          }
-          placeholder="e.g. 9876543210"
-        />
-      </label>
-
-      <label>
-        Email
-        <input
-          type="email"
-          value={form.email}
-          onChange={(event) =>
-            setForm({
-              ...form,
-              email: event.target.value,
-            })
-          }
-          placeholder="e.g. sam@example.com"
+          value={form.firm_address}
+          onChange={(event) => setForm({ ...form, firm_address: event.target.value })}
+          placeholder="e.g. 12 Main Street"
         />
       </label>
 
@@ -181,6 +152,61 @@ export function ContractorForm({
       </button>
     </Modal>
   );
+}
+
+export function ContractorDirectory({ contractors, onAdd, close }) {
+  return (
+    <Modal title="Contractors" eyebrow="Directory" close={close} onSubmit={(event) => event.preventDefault()}>
+      <div className="section-actions">
+        <span className="modal-intro">{contractors.length} contractor{contractors.length === 1 ? '' : 's'} saved</span>
+        <button type="button" className="primary-button" onClick={onAdd}>+ Add contractor</button>
+      </div>
+      <div className="contractor-list">
+        {contractors.length ? contractors.map((contractor) => (
+          <div className="contractor-row" key={contractor.id}>
+            <span className="avatar">{(contractor.name || 'C').split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase()}</span>
+            <span><strong>{contractor.name}</strong><small>{contractor.firm_name || 'Independent contractor'}</small></span>
+            <span className="contractor-total"><small>{contractor.phone_number || 'No phone'}</small></span>
+          </div>
+        )) : <p className="empty-state">No contractors saved yet.</p>}
+      </div>
+    </Modal>
+  )
+}
+
+export function NewContractorForm({ form, setForm, onSubmit, close }) {
+  return (
+    <Modal title="New contractor" eyebrow="Contractors" close={close} onSubmit={onSubmit}>
+      <p className="modal-intro">Save contractor details for future project payments.</p>
+
+      <label>
+        Name *
+        <input required autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Sam Rivera" />
+      </label>
+
+      <label>
+        Firm name
+        <input value={form.firm_name} onChange={(event) => setForm({ ...form, firm_name: event.target.value })} placeholder="e.g. Rivera Build Works" />
+      </label>
+
+      <label>
+        Phone number
+        <input type="tel" inputMode="numeric" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value.replace(/\D/g, '').slice(0, 10) })} placeholder="e.g. 9876543210" maxLength={10} />
+      </label>
+
+      <label>
+        Firm address
+        <input value={form.firm_address} onChange={(event) => setForm({ ...form, firm_address: event.target.value })} placeholder="e.g. 12 Main Street" />
+      </label>
+
+      <label>
+        Description
+        <textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Trade or work speciality" rows="3" style={{ width: '100%' }} />
+      </label>
+
+      <button type="submit" className="primary-button full">Save contractor</button>
+    </Modal>
+  )
 }
 
 function money(amount) {

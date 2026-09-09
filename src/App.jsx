@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { ContractorForm, ContractorList } from './components/ContractorComponents'
+import { ContractorDirectory, ContractorForm, ContractorList, NewContractorForm } from './components/ContractorComponents'
 import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
 import { ProjectForm, ProjectList } from './components/ProjectComponents'
@@ -12,10 +12,12 @@ function normalizeProject(project) {
   return {
     id: project.id,
     name: project.name,
-    location: project.location || 'Location not set',
+    owner_name: project.owner_name || '',
+    phone_number: project.phone_number || '',
+    address: project.address || '',
+    estimated_cost: project.estimated_cost == null ? '' : Number(project.estimated_cost),
+    location: project.address || 'Address not set',
     description: project.description || '',
-    estimated_amount: Number(project.estimated_amount || 0),
-    status: project.status || 'Planned',
     start_date: project.start_date || today,
     color: ['#e77b54', '#4ca68c', '#d2915d', '#5d9cc7'][project.id % 4] || '#e77b54',
   }
@@ -54,14 +56,16 @@ function money(amount) {
 function App() {
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
+  const [contractors, setContractors] = useState([])
   const [projectPayments, setProjectPayments] = useState([])
   const [contractorPayments, setContractorPayments] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [modal, setModal] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [projectForm, setProjectForm] = useState({ name: '', location: '', mobile_number: '', description: '', estimated_amount: '', status: 'Planned', start_date: today })
-  const [contractorForm, setContractorForm] = useState({ name: '', company_name: '', phone: '', email: '', contract_amount: '', work_description: '' })
+  const [projectForm, setProjectForm] = useState({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
+  const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, description: '' })
+  const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
 
@@ -79,6 +83,16 @@ function App() {
       setError(loadError.message)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function loadContractors() {
+    try {
+      const response = await fetch(`${API_BASE}/contractors`)
+      if (!response.ok) throw new Error('Contractors could not be loaded')
+      setContractors(await response.json())
+    } catch (loadError) {
+      setError(loadError.message)
     }
   }
 
@@ -115,6 +129,7 @@ function App() {
 
   useEffect(() => {
     loadProjects()
+    loadContractors()
   }, [])
 
   useEffect(() => {
@@ -126,7 +141,7 @@ function App() {
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0] || null
   const projectReceived = projectPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
   const totalSpend = contractorPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
-  const projectBalance = Math.max((selectedProject?.estimated_amount || 0) - projectReceived, 0)
+  const projectBalance = 0
   const projectInitials = useMemo(() => selectedProject?.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase() || '', [selectedProject])
 
   async function exportProjectReport() {
@@ -239,13 +254,13 @@ function App() {
             <div class="header">
               <div class="eyebrow">Project report</div>
               <h1>${selectedProject.name}</h1>
-              <div class="meta">${selectedProject.location || 'Location not set'} • ${selectedProject.status || 'Planned'} • ${formatDate(selectedProject.start_date || today)}</div>
+              <div class="meta">Owner: ${selectedProject.owner_name || 'Not set'} • ${selectedProject.address || 'Address not set'} • ${formatDate(selectedProject.start_date || today)}</div>
             </div>
 
             <div class="summary-grid">
               <div class="card">
-                <div class="label">Project estimate</div>
-                <div class="value">${formatCurrency(selectedProject.estimated_amount || 0)}</div>
+                <div class="label">Project payments</div>
+                <div class="value">${formatCurrency(incomingTotal)}</div>
               </div>
               <div class="card">
                 <div class="label">Received from owner</div>
@@ -311,16 +326,16 @@ function App() {
 
   async function addProject(event) {
     event.preventDefault()
-    if (!projectForm.name.trim() || !projectForm.location.trim()) return
+    if (!projectForm.name.trim() || !projectForm.address.trim()) return
 
     try {
       const payload = {
         name: projectForm.name.trim(),
+        owner_name: projectForm.owner_name.trim(),
+        phone_number: projectForm.phone_number.trim(),
+        address: projectForm.address.trim(),
+        ...(projectForm.estimated_cost !== '' ? { estimated_cost: Number(projectForm.estimated_cost) } : {}),
         description: projectForm.description.trim(),
-        location: projectForm.location.trim() || 'Location not set',
-        mobile_number: projectForm.mobile_number.trim(),
-        estimated_amount: Number(projectForm.estimated_amount || 0),
-        status: projectForm.status || 'Planned',
         start_date: projectForm.start_date ? new Date(projectForm.start_date).toISOString() : new Date().toISOString(),
       }
 
@@ -339,7 +354,7 @@ function App() {
       const normalized = normalizeProject(createdProject)
       setProjects((current) => [normalized, ...current])
       setSelectedProjectId(normalized.id)
-      setProjectForm({ name: '', location: '', mobile_number: '', description: '', estimated_amount: '', status: 'Planned', start_date: today })
+      setProjectForm({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
       setModal(null)
       setError('')
     } catch (createError) {
@@ -349,51 +364,60 @@ function App() {
 
   async function addContractor(event) {
     event.preventDefault()
-    if (!selectedProject || !contractorForm.name.trim()) return
+    if (!selectedProject || !contractorForm.contractorId || !contractorForm.amount || !contractorForm.description.trim()) return
 
     try {
-      const contractorPayload = {
-        name: contractorForm.name.trim(),
-        company_name: contractorForm.company_name.trim(),
-        phone: contractorForm.phone.trim(),
-        email: contractorForm.email.trim(),
-        address: '',
-        gst_number: '',
-        notes: contractorForm.work_description.trim(),
-      }
-
-      const contractorResponse = await fetch(`${API_BASE}/contractors`, {
+      const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractorForm.contractorId}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(contractorPayload),
+        body: JSON.stringify({
+          amount: Number(contractorForm.amount || 0),
+          payment_date: new Date(contractorForm.date).toISOString(),
+          description: contractorForm.description.trim() || 'Contractor payment',
+        }),
       })
 
-      if (!contractorResponse.ok) {
-        const errorBody = await contractorResponse.json().catch(() => ({ error: { message: 'Unable to add contractor' } }))
-        throw new Error(errorBody.error?.message || 'Unable to add contractor')
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to save contractor payment' } }))
+        throw new Error(errorBody.error?.message || 'Unable to save contractor payment')
       }
 
-      const contractor = await contractorResponse.json()
-      const associationPayload = {
-        contract_amount: Number(contractorForm.contract_amount || 0),
-        work_description: contractorForm.work_description.trim(),
-      }
-
-      const associationResponse = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractor.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(associationPayload),
-      })
-
-      if (!associationResponse.ok) {
-        const errorBody = await associationResponse.json().catch(() => ({ error: { message: 'Unable to assign contractor to project' } }))
-        throw new Error(errorBody.error?.message || 'Unable to assign contractor to project')
-      }
-
-      setContractorForm({ name: '', company_name: '', phone: '', email: '', contract_amount: '', work_description: '' })
+      setContractorForm({ contractorId: '', amount: '', date: today, description: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
+    } catch (createError) {
+      setError(createError.message)
+    }
+  }
+
+  async function createContractor(event) {
+    event.preventDefault()
+    if (!newContractorForm.name.trim()) return
+
+    try {
+      const response = await fetch(`${API_BASE}/contractors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newContractorForm.name.trim(),
+          firm_name: newContractorForm.firm_name.trim(),
+          phone_number: newContractorForm.phone_number.trim(),
+          firm_address: newContractorForm.firm_address.trim(),
+          description: newContractorForm.description.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to create contractor' } }))
+        throw new Error(errorBody.error?.message || 'Unable to create contractor')
+      }
+
+      setNewContractorForm({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
+      await loadContractors()
+      setModal(null)
+      setError('')
+      if (selectedProject) await loadProjectDetails(selectedProject.id)
     } catch (createError) {
       setError(createError.message)
     }
@@ -439,7 +463,7 @@ function App() {
       <div className="side-label">Workspace</div>
       <button type="button" className="nav-item active"><span>◈</span>Overview</button>
       <button type="button" className="nav-item" onClick={() => setModal('project')}><span>▦</span>Projects <b>+</b></button>
-      <button type="button" className="nav-item"><span>♧</span>Contractors</button>
+      <button type="button" className="nav-item" onClick={() => setModal('contractors')}><span>♧</span>Contractors</button>
       <div className="sidebar-bottom">
         <div className="side-label">Your workspace</div>
         <div className="profile">
@@ -495,7 +519,7 @@ function App() {
           </div>
 
           <div className="detail-stats">
-            <div><span>Project estimate</span><strong>{money(selectedProject.estimated_amount || 0)}</strong></div>
+            <div><span>Estimated cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not set' : money(selectedProject.estimated_cost)}</strong></div>
             <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
             <div><span>Balance due</span><strong>{money(projectBalance)}</strong></div>
           </div>
@@ -505,7 +529,7 @@ function App() {
               <h3>Contractors & Expenses <span className="count">{projectContractors.length}</span></h3>
               <p>People assigned to this project</p>
             </div>
-            <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Add contractor</button>
+            <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Pay contractor</button>
           </div>
           <ContractorList contractors={projectContractors} />
 
@@ -525,7 +549,9 @@ function App() {
     </main>
 
     {modal === 'project' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={addProject} close={() => setModal(null)} />}
-    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} />}
+    {modal === 'contractors' && <ContractorDirectory contractors={contractors} onAdd={() => setModal('new-contractor')} close={() => setModal(null)} />}
+    {modal === 'new-contractor' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={createContractor} close={() => setModal(null)} />}
+    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} />}
     {modal === 'expense' && <ExpenseForm projectName={selectedProject?.name} contractors={projectContractors} form={expenseForm} setForm={setExpenseForm} onSubmit={(event) => {
       event.preventDefault()
       if (!selectedProject || !expenseForm.contractorId || !expenseForm.amount) return
