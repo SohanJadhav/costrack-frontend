@@ -1,12 +1,26 @@
 import Modal from './Modal'
 
 export function PaymentList({ payments }) {
+  const entries = Array.isArray(payments) ? payments.slice().reverse() : []
+
   return <div className="payment-list">
-    {payments.length ? payments.slice().reverse().map((payment) => <div className="payment-row" key={payment.id}>
-      <span className="payment-dot">+</span>
-      <span className="payment-copy"><strong>{payment.note || payment.description || 'Payment received'}</strong><small>{new Date(`${payment.date || payment.payment_date}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</small></span>
-      <strong className="payment-amount">{money(payment.amount)}</strong>
-    </div>) : <p className="empty-state">No payments received yet.</p>}
+    {entries.length ? entries.map((payment) => {
+      const dateValue = payment.date || payment.payment_date
+      const formattedDate = dateValue
+        ? new Date(`${String(dateValue).slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+        : 'Date not set'
+      const mode = payment.paymentMode || payment.payment_mode
+      const modeLabel = mode ? mode.replaceAll('_', ' ') : 'Payment received'
+
+      return <div className="payment-row" key={payment.id}>
+        <span className="payment-date-badge" aria-hidden="true">₹</span>
+        <span className="payment-copy">
+          <strong>{payment.note || payment.description || 'Payment received'}</strong>
+          <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}</small>
+        </span>
+        <strong className="payment-amount">{money(payment.amount)}</strong>
+      </div>
+    }) : <div className="payment-empty"><span className="payment-empty-icon">+</span><strong>No payments received yet</strong><small>Owner installments will appear here.</small></div>}
   </div>
 }
 

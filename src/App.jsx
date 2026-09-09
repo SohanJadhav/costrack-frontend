@@ -4,6 +4,7 @@ import { ContractorDirectory, ContractorForm, ContractorList, NewContractorForm 
 import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
 import { ProjectDirectory, ProjectForm, ProjectList } from './components/ProjectComponents'
+import Login from './components/Login'
 
 const API_BASE = 'http://localhost:8080/api/v1'
 const today = new Date().toISOString().slice(0, 10)
@@ -54,6 +55,13 @@ function money(amount) {
 }
 
 function App() {
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('costtrack-user'))
+    } catch {
+      return null
+    }
+  })
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
   const [contractors, setContractors] = useState([])
@@ -69,6 +77,23 @@ function App() {
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
+
+  async function login(credentials) {
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error?.message || 'Unable to sign in')
+      localStorage.setItem('costtrack-user', JSON.stringify(data))
+      setUser(data)
+      setError('')
+    } catch (loginError) {
+      setError(loginError.message)
+    }
+  }
 
   async function loadProjects() {
     try {
@@ -130,9 +155,10 @@ function App() {
   }
 
   useEffect(() => {
+    if (!user) return
     loadProjects()
     loadContractors()
-  }, [])
+  }, [user])
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -459,6 +485,8 @@ function App() {
     }
   }
 
+  if (!user) return <Login onLogin={login} error={error} />
+
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">$</span><span>costrack</span></div>
@@ -470,7 +498,7 @@ function App() {
         <div className="side-label">Your workspace</div>
         <div className="profile">
           <span className="avatar dark">AS</span>
-          <span><strong>Alex Smith</strong><small>Administrator</small></span>
+          <span><strong>{user.name}</strong><small>{user.username}</small></span>
           <span className="dots">•••</span>
         </div>
       </div>
@@ -480,11 +508,22 @@ function App() {
       <header className="topbar">
         <div>
           <span className="eyebrow">Tuesday, September 1, 2026</span>
-          <h1>Good morning, Alex <span>✦</span></h1>
+          <h1>Good morning, {user.name} <span>✦</span></h1>
         </div>
         <div className="top-actions">
           <button type="button" className="icon-button" aria-label="Notifications">♧<i /></button>
-          <button type="button" className="avatar coral">AS</button>
+          <button type="button" className="avatar coral" aria-label="User profile">{user.name.slice(0, 2).toUpperCase()}</button>
+          <button
+            type="button"
+            className="logout-button"
+            onClick={() => {
+              localStorage.removeItem('costtrack-user')
+              setUser(null)
+              setError('')
+            }}
+          >
+            Log out
+          </button>
         </div>
       </header>
 
