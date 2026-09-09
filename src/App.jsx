@@ -91,7 +91,8 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/contractors`)
       if (!response.ok) throw new Error('Contractors could not be loaded')
-      setContractors(await response.json())
+      const data = await response.json()
+      setContractors(Array.isArray(data) ? data : [])
     } catch (loadError) {
       setError(loadError.message)
     }

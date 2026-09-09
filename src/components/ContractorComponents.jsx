@@ -49,7 +49,7 @@ export function ContractorList({ contractors }) {
 
 export function ContractorForm({
   projectName,
-  contractors,
+  contractors = [],
   form,
   setForm,
   onSubmit,
@@ -70,7 +70,7 @@ export function ContractorForm({
         Contractor *
         <select required autoFocus value={form.contractorId} onChange={(event) => setForm({ ...form, contractorId: event.target.value })}>
           <option value="">Select contractor</option>
-          {contractors.map((contractor) => <option key={contractor.id} value={contractor.id}>{contractor.name}</option>)}
+          {(Array.isArray(contractors) ? contractors : []).map((contractor) => <option key={contractor.id} value={contractor.id}>{contractor.name}</option>)}
         </select>
       </label>
 
