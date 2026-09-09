@@ -31,12 +31,13 @@ function normalizeContractorSummary(item) {
   }
 }
 
-function normalizePayment(item) {
+function normalizePayment(item, contractorId) {
   const dateValue = item.payment_date || item.date || today
   return {
     id: item.id,
-    contractorId: item.contractor_id ?? item.contractorId,
+    contractorId: item.contractor_id ?? item.contractorId ?? contractorId,
     projectId: item.project_id ?? item.projectId,
+    paymentType: item.payment_type || item.paymentType || 'contractor',
     amount: Number(item.amount || 0),
     note: item.notes || item.description || item.note || 'Payment received',
     description: item.description || item.notes || item.note || 'Payment received',
@@ -54,6 +55,7 @@ function App() {
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
   const [projectPayments, setProjectPayments] = useState([])
+  const [contractorPayments, setContractorPayments] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [modal, setModal] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -61,7 +63,7 @@ function App() {
   const [projectForm, setProjectForm] = useState({ name: '', location: '', mobile_number: '', description: '', estimated_amount: '', status: 'Planned', start_date: today })
   const [contractorForm, setContractorForm] = useState({ name: '', company_name: '', phone: '', email: '', contract_amount: '', work_description: '' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
-  const [paymentForm, setPaymentForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: 'cash', note: '' })
+  const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
 
   async function loadProjects() {
     try {
@@ -90,16 +92,22 @@ function App() {
       const contractors = (summary.contractors || []).map(normalizeContractorSummary)
       setProjectContractors(contractors)
 
-      const paymentResponses = await Promise.all(
+      const paymentsResponse = await fetch(`${API_BASE}/projects/${projectId}/payments`)
+      if (!paymentsResponse.ok) throw new Error('Project payments could not be loaded')
+      const payments = await paymentsResponse.json()
+      setProjectPayments((payments || []).map(normalizePayment))
+
+      const contractorPaymentResponses = await Promise.all(
         contractors.map(async (contractor) => {
-          const detailResponse = await fetch(`${API_BASE}/projects/${projectId}/contractors/${contractor.contractor_id}/payment-summary`)
-          if (!detailResponse.ok) return []
-          const detail = await detailResponse.json()
-          return (detail.payments || []).map(normalizePayment)
+          const response = await fetch(`${API_BASE}/projects/${projectId}/contractors/${contractor.contractor_id}/payments`)
+          if (!response.ok) {
+            throw new Error(`Payments for ${contractor.contractor_name} could not be loaded`)
+          }
+          const summary = await response.json()
+          return (summary.payments || []).map((payment) => normalizePayment(payment, contractor.contractor_id))
         }),
       )
-
-      setProjectPayments(paymentResponses.flat())
+      setContractorPayments(contractorPaymentResponses.flat())
     } catch (detailError) {
       setError(detailError.message)
     }
@@ -117,14 +125,34 @@ function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0] || null
   const projectReceived = projectPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
-  const totalSpend = projectPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+  const totalSpend = contractorPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
   const projectBalance = Math.max((selectedProject?.estimated_amount || 0) - projectReceived, 0)
   const projectInitials = useMemo(() => selectedProject?.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase() || '', [selectedProject])
 
-  function exportProjectReport() {
+  async function exportProjectReport() {
     if (!selectedProject) return
 
-    const incomingEntries = [...projectPayments]
+    try {
+      const [ownerPaymentsResponse, contractorPaymentResponses] = await Promise.all([
+        fetch(`${API_BASE}/projects/${selectedProject.id}/payments`),
+        Promise.all(projectContractors.map(async (contractor) => {
+          const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractor.contractor_id}/payments`)
+          if (!response.ok) {
+            throw new Error(`Payments for ${contractor.contractor_name} could not be loaded`)
+          }
+          const summary = await response.json()
+          return (summary.payments || []).map((payment) => normalizePayment(payment, contractor.contractor_id))
+        })),
+      ])
+
+      if (!ownerPaymentsResponse.ok) throw new Error('Owner payments could not be loaded')
+
+      const latestOwnerPayments = (await ownerPaymentsResponse.json()).map(normalizePayment)
+      const latestContractorPayments = contractorPaymentResponses.flat()
+      setProjectPayments(latestOwnerPayments)
+      setContractorPayments(latestContractorPayments)
+
+      const incomingEntries = [...latestOwnerPayments]
       .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
       .map((payment) => ({
         date: payment.date || payment.payment_date || today,
@@ -132,7 +160,7 @@ function App() {
         amount: Number(payment.amount || 0),
       }))
 
-    const contractorEntries = [...projectPayments]
+      const contractorEntries = [...latestContractorPayments]
       .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
       .map((payment) => {
         const contractor = projectContractors.find((item) => item.contractor_id === payment.contractorId)
@@ -144,18 +172,18 @@ function App() {
         }
       })
 
-    const incomingTotal = incomingEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
-    const outgoingTotal = contractorEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+      const incomingTotal = incomingEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+      const outgoingTotal = contractorEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
 
-    const formatCurrency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
-    const formatDate = (value) => {
+      const formatCurrency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
+      const formatDate = (value) => {
       if (!value) return '—'
       const date = new Date(value)
       if (Number.isNaN(date.getTime())) return value
       return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
-    }
+      }
 
-    const incomingRows = incomingEntries.length
+      const incomingRows = incomingEntries.length
       ? incomingEntries.map((entry) => `
           <tr>
             <td>${formatDate(entry.date)}</td>
@@ -167,7 +195,7 @@ function App() {
             <td colspan="3" class="empty">No incoming payments recorded yet</td>
           </tr>`
 
-    const contractorRows = contractorEntries.length
+      const contractorRows = contractorEntries.length
       ? contractorEntries.map((entry) => `
           <tr>
             <td>${formatDate(entry.date)}</td>
@@ -180,7 +208,7 @@ function App() {
             <td colspan="4" class="empty">No contractor payments recorded yet</td>
           </tr>`
 
-    const reportHtml = `
+      const reportHtml = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -266,16 +294,19 @@ function App() {
       </html>
     `
 
-    const printWindow = window.open('', '_blank', 'width=1000,height=800')
-    if (!printWindow) {
-      setError('Popup blocked. Please allow popups to export the project report.')
-      return
-    }
+      const printWindow = window.open('', '_blank', 'width=1000,height=800')
+      if (!printWindow) {
+        setError('Popup blocked. Please allow popups to export the project report.')
+        return
+      }
 
-    printWindow.document.write(reportHtml)
-    printWindow.document.close()
-    printWindow.focus()
-    setTimeout(() => printWindow.print(), 250)
+      printWindow.document.write(reportHtml)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => printWindow.print(), 250)
+    } catch (exportError) {
+      setError(exportError.message)
+    }
   }
 
   async function addProject(event) {
@@ -370,7 +401,7 @@ function App() {
 
   async function addPayment(event) {
     event.preventDefault()
-    if (!selectedProject || !paymentForm.contractorId || !paymentForm.amount) return
+    if (!selectedProject || !paymentForm.amount) return
 
     try {
       const payload = {
@@ -382,7 +413,7 @@ function App() {
         notes: paymentForm.note.trim() || 'Payment received',
       }
 
-      const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${paymentForm.contractorId}/payments`, {
+      const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -393,7 +424,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to save payment')
       }
 
-      setPaymentForm({ contractorId: '', amount: '', date: today, paymentMode: 'cash', note: '' })
+      setPaymentForm({ amount: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
@@ -508,7 +539,7 @@ function App() {
       setModal('payment')
       setExpenseForm({ contractorId: '', amount: '', description: '' })
     }} close={() => setModal(null)} />}
-    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} contractors={projectContractors} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} />}
+    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} />}
 
     {isLoading && <div className="loading-indicator">Loading projects...</div>}
   </div>

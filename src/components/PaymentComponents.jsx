@@ -10,7 +10,7 @@ export function PaymentList({ payments }) {
   </div>
 }
 
-export function PaymentForm({ projectName, contractors, form, setForm, onSubmit, close }) {
+export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
   return (
     <Modal
       title="Add received payment"
@@ -19,7 +19,7 @@ export function PaymentForm({ projectName, contractors, form, setForm, onSubmit,
       onSubmit={onSubmit}
     >
       <p className="modal-intro">
-        Record an installment received from the client.
+        Record an installment received from the project owner.
       </p>
 
       <label>
@@ -27,7 +27,7 @@ export function PaymentForm({ projectName, contractors, form, setForm, onSubmit,
         <input
           type="number"
           required
-          min="0"
+          min="1"
           value={form.amount}
           onChange={(event) =>
             setForm({ ...form, amount: event.target.value })
