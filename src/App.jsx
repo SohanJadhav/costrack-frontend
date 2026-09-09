@@ -3,7 +3,7 @@ import './App.css'
 import { ContractorDirectory, ContractorForm, ContractorList, NewContractorForm } from './components/ContractorComponents'
 import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
-import { ProjectForm, ProjectList } from './components/ProjectComponents'
+import { ProjectDirectory, ProjectForm, ProjectList } from './components/ProjectComponents'
 
 const API_BASE = 'http://localhost:8080/api/v1'
 const today = new Date().toISOString().slice(0, 10)
@@ -57,6 +57,7 @@ function App() {
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
   const [contractors, setContractors] = useState([])
+  const [activeView, setActiveView] = useState('overview')
   const [projectPayments, setProjectPayments] = useState([])
   const [contractorPayments, setContractorPayments] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState(null)
@@ -461,9 +462,9 @@ function App() {
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">$</span><span>costrack</span></div>
       <div className="side-label">Workspace</div>
-      <button type="button" className="nav-item active"><span>◈</span>Overview</button>
-      <button type="button" className="nav-item" onClick={() => setModal('project')}><span>▦</span>Projects <b>+</b></button>
-      <button type="button" className="nav-item" onClick={() => setModal('contractors')}><span>♧</span>Contractors</button>
+      <button type="button" className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} onClick={() => setActiveView('overview')}><span>◈</span>Overview</button>
+      <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects <b>+</b></button>
+      <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors</button>
       <div className="sidebar-bottom">
         <div className="side-label">Your workspace</div>
         <div className="profile">
@@ -488,6 +489,7 @@ function App() {
 
       {error && <div className="error-banner">{error}</div>}
 
+      {activeView === 'contractors' ? <ContractorDirectory contractors={contractors} onAdd={() => setModal('new-contractor')} /> : activeView === 'projects' ? <ProjectDirectory projects={projects} onAdd={() => setModal('project')} /> : <>
       <section className="summary-grid">
         <div className="summary-card warm"><span>Total spend</span><strong>{money(totalSpend)}</strong><small><em>↗ 12.4%</em> from last month</small></div>
         <div className="summary-card"><span>Active projects</span><strong>{projects.length}</strong><small><em className="green">●</em> All projects on track</small></div>
@@ -521,7 +523,7 @@ function App() {
           <div className="detail-stats">
             <div><span>Estimated cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not set' : money(selectedProject.estimated_cost)}</strong></div>
             <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
-            <div><span>Balance due</span><strong>{money(projectBalance)}</strong></div>
+            <div><span>Balance due</span><strong>{money(selectedProject.estimated_cost-projectReceived)}</strong></div>
           </div>
 
           <div className="section-head">
@@ -546,10 +548,10 @@ function App() {
           <PaymentList payments={projectPayments} />
         </div>}
       </section>
+      </>}
     </main>
 
     {modal === 'project' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={addProject} close={() => setModal(null)} />}
-    {modal === 'contractors' && <ContractorDirectory contractors={contractors} onAdd={() => setModal('new-contractor')} close={() => setModal(null)} />}
     {modal === 'new-contractor' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={createContractor} close={() => setModal(null)} />}
     {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} />}
     {modal === 'expense' && <ExpenseForm projectName={selectedProject?.name} contractors={projectContractors} form={expenseForm} setForm={setExpenseForm} onSubmit={(event) => {

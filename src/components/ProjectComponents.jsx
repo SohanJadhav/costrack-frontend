@@ -11,6 +11,43 @@ export function ProjectList({ projects, selectedProjectId, onSelect, onCreate })
   </div>
 }
 
+export function ProjectDirectory({ projects, onAdd }) {
+  return (
+    <section className="directory-page">
+      <div className="directory-header">
+        <div>
+          <span className="eyebrow">Workspace</span>
+          <h2>Projects <span className="count">{projects.length}</span></h2>
+          <p>Review project owners, schedules, addresses, and estimated costs.</p>
+        </div>
+        <button type="button" className="primary-button" onClick={onAdd}>+ Add project</button>
+      </div>
+      <div className="contractor-table-wrap">
+        {projects.length ? (
+          <table className="contractor-table">
+            <thead>
+              <tr><th>Project</th><th>Owner</th><th>Phone</th><th>Address</th><th>Estimated cost</th><th>Start date</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              {projects.map((project) => (
+                <tr key={project.id}>
+                  <td><strong>{project.name}</strong></td>
+                  <td>{project.owner_name || '—'}</td>
+                  <td>{project.phone_number || '—'}</td>
+                  <td>{project.address || '—'}</td>
+                  <td>{project.estimated_cost === '' ? '—' : money(project.estimated_cost)}</td>
+                  <td>{project.start_date ? new Date(project.start_date).toLocaleDateString('en-IN') : '—'}</td>
+                  <td>{project.description || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <p className="empty-state">No projects saved yet.</p>}
+      </div>
+    </section>
+  )
+}
+
 export function ProjectForm({ form, setForm, onSubmit, close }) {
   return <Modal title="New project" eyebrow="Workspace" close={close} onSubmit={onSubmit}>
     <label>Project name<input required autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Oak Street build" /></label>

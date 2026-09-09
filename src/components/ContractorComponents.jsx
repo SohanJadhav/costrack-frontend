@@ -154,23 +154,38 @@ export function ContractorForm({
   );
 }
 
-export function ContractorDirectory({ contractors, onAdd, close }) {
+export function ContractorDirectory({ contractors, onAdd }) {
   return (
-    <Modal title="Contractors" eyebrow="Directory" close={close} onSubmit={(event) => event.preventDefault()}>
-      <div className="section-actions">
-        <span className="modal-intro">{contractors.length} contractor{contractors.length === 1 ? '' : 's'} saved</span>
+    <section className="directory-page">
+      <div className="directory-header">
+        <div>
+          <span className="eyebrow">Directory</span>
+          <h2>Contractors <span className="count">{contractors.length}</span></h2>
+          <p>Manage your contractor contacts and payment records.</p>
+        </div>
         <button type="button" className="primary-button" onClick={onAdd}>+ Add contractor</button>
       </div>
-      <div className="contractor-list">
-        {contractors.length ? contractors.map((contractor) => (
-          <div className="contractor-row" key={contractor.id}>
-            <span className="avatar">{(contractor.name || 'C').split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase()}</span>
-            <span><strong>{contractor.name}</strong><small>{contractor.firm_name || 'Independent contractor'}</small></span>
-            <span className="contractor-total"><small>{contractor.phone_number || 'No phone'}</small></span>
-          </div>
-        )) : <p className="empty-state">No contractors saved yet.</p>}
+      <div className="contractor-table-wrap">
+        {contractors.length ? (
+          <table className="contractor-table">
+            <thead>
+              <tr><th>Name</th><th>Firm name</th><th>Phone number</th><th>Firm address</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              {contractors.map((contractor) => (
+                <tr key={contractor.id}>
+                  <td><strong>{contractor.name}</strong></td>
+                  <td>{contractor.firm_name || '—'}</td>
+                  <td>{contractor.phone_number || '—'}</td>
+                  <td>{contractor.firm_address || '—'}</td>
+                  <td>{contractor.description || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <p className="empty-state">No contractors saved yet.</p>}
       </div>
-    </Modal>
+    </section>
   )
 }
 
