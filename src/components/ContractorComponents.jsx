@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Modal from './Modal'
 
 export function ContractorList({ contractors }) {
@@ -55,6 +56,19 @@ export function ContractorForm({
   onSubmit,
   close,
 }) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const query = search.toLowerCase()
+  const list = Array.isArray(contractors) ? contractors : []
+  const filtered = query ? list.filter((c) => (c.name || '').toLowerCase().includes(query)) : list
+  const selectedName = list.find((c) => String(c.id) === String(form.contractorId))?.name || ''
+
+  function pick(id) {
+    setForm({ ...form, contractorId: id })
+    setSearch('')
+    setOpen(false)
+  }
+
   return (
     <Modal
       title="Pay contractor"
@@ -68,10 +82,33 @@ export function ContractorForm({
 
       <label>
         Contractor *
-        <select required autoFocus value={form.contractorId} onChange={(event) => setForm({ ...form, contractorId: event.target.value })}>
-          <option value="">Select contractor</option>
-          {(Array.isArray(contractors) ? contractors : []).map((contractor) => <option key={contractor.id} value={contractor.id}>{contractor.name}</option>)}
-        </select>
+        <div className="combo-wrap">
+          <input
+            className="combo-input"
+            required
+            autoFocus
+            placeholder={selectedName || 'Search contractor…'}
+            value={open ? search : selectedName}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onChange={(e) => { setSearch(e.target.value); setOpen(true) }}
+          />
+          {open && (
+            <ul className="combo-list">
+              {filtered.length ? filtered.map((c) => (
+                <li
+                  key={c.id}
+                  className={`combo-item${String(form.contractorId) === String(c.id) ? ' selected' : ''}`}
+                  onMouseDown={() => pick(c.id)}
+                >
+                  {c.name}
+                </li>
+              )) : <li className="combo-empty">No contractors found</li>}
+            </ul>
+          )}
+        </div>
+        {/* hidden input to satisfy required validation */}
+        <input type="hidden" required value={form.contractorId} />
       </label>
 
       <label>
@@ -81,12 +118,7 @@ export function ContractorForm({
           required
           min="0"
           value={form.amount}
-          onChange={(event) =>
-            setForm({
-              ...form,
-              amount: event.target.value,
-            })
-          }
+          onChange={(event) => setForm({ ...form, amount: event.target.value })}
           placeholder="e.g. 250000"
         />
       </label>
@@ -97,13 +129,22 @@ export function ContractorForm({
           type="date"
           required
           value={form.date}
-          onChange={(event) =>
-            setForm({
-              ...form,
-              date: event.target.value,
-            })
-          }
+          onChange={(event) => setForm({ ...form, date: event.target.value })}
         />
+      </label>
+
+      <label>
+        Payment mode
+        <select
+          value={form.paymentMode || ''}
+          onChange={(event) => setForm({ ...form, paymentMode: event.target.value })}
+        >
+          <option value="">— optional —</option>
+          <option value="cash">Cash</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="cheque">Cheque</option>
+          <option value="upi">UPI</option>
+        </select>
       </label>
 
       <label>
@@ -113,66 +154,60 @@ export function ContractorForm({
       <textarea
         required
         value={form.description}
-        onChange={(event) =>
-          setForm({
-            ...form,
-            description: event.target.value,
-          })
-        }
+        onChange={(event) => setForm({ ...form, description: event.target.value })}
         rows="3"
         placeholder="Describe the work or payment"
         style={{ width: '100%' }}
       />
 
-      <label>
-        Firm name
-        <input
-          value={form.firm_name}
-          onChange={(event) =>
-            setForm({
-                ...form,
-                firm_name: event.target.value,
-            })
-          }
-          placeholder="e.g. Rivera Build Works"
-        />
-      </label>
-
-      <label>
-        Firm address
-        <input
-          value={form.firm_address}
-          onChange={(event) => setForm({ ...form, firm_address: event.target.value })}
-          placeholder="e.g. 12 Main Street"
-        />
-      </label>
-
       <button type="submit" className="primary-button full">
-        Add expense
+        Pay contractor
       </button>
     </Modal>
   );
 }
 
+
 export function ContractorDirectory({ contractors, onAdd }) {
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLowerCase()
+  const filtered = query
+    ? contractors.filter((c) =>
+        (c.name || '').toLowerCase().includes(query) ||
+        (c.firm_name || '').toLowerCase().includes(query) ||
+        (c.phone_number || '').toLowerCase().includes(query) ||
+        (c.firm_address || '').toLowerCase().includes(query)
+      )
+    : contractors
+
   return (
     <section className="directory-page">
       <div className="directory-header">
         <div>
           <span className="eyebrow">Directory</span>
-          <h2>Contractors <span className="count">{contractors.length}</span></h2>
+          <h2>Contractors <span className="count">{filtered.length}</span></h2>
           <p>Manage your contractor contacts and payment records.</p>
         </div>
-        <button type="button" className="primary-button" onClick={onAdd}>+ Add contractor</button>
+        <div className="dir-actions">
+          <input
+            className="dir-search"
+            type="search"
+            placeholder="Search contractors…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search contractors"
+          />
+          <button type="button" className="primary-button" onClick={onAdd}>+ Add contractor</button>
+        </div>
       </div>
       <div className="contractor-table-wrap">
-        {contractors.length ? (
+        {filtered.length ? (
           <table className="contractor-table">
             <thead>
               <tr><th>Name</th><th>Firm name</th><th>Phone number</th><th>Firm address</th><th>Description</th></tr>
             </thead>
             <tbody>
-              {contractors.map((contractor) => (
+              {filtered.map((contractor) => (
                 <tr key={contractor.id}>
                   <td><strong>{contractor.name}</strong></td>
                   <td>{contractor.firm_name || '—'}</td>
@@ -183,11 +218,12 @@ export function ContractorDirectory({ contractors, onAdd }) {
               ))}
             </tbody>
           </table>
-        ) : <p className="empty-state">No contractors saved yet.</p>}
+        ) : <p className="empty-state">{query ? 'No contractors match your search.' : 'No contractors saved yet.'}</p>}
       </div>
     </section>
   )
 }
+
 
 export function NewContractorForm({ form, setForm, onSubmit, close }) {
   return (

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Modal from './Modal'
 
 export function ProjectList({ projects, selectedProjectId, onSelect, onCreate }) {
@@ -12,24 +13,44 @@ export function ProjectList({ projects, selectedProjectId, onSelect, onCreate })
 }
 
 export function ProjectDirectory({ projects, onAdd }) {
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLowerCase()
+  const filtered = query
+    ? projects.filter((p) =>
+        (p.name || '').toLowerCase().includes(query) ||
+        (p.owner_name || '').toLowerCase().includes(query) ||
+        (p.address || '').toLowerCase().includes(query)
+      )
+    : projects
+
   return (
     <section className="directory-page">
       <div className="directory-header">
         <div>
           <span className="eyebrow">Workspace</span>
-          <h2>Projects <span className="count">{projects.length}</span></h2>
+          <h2>Projects <span className="count">{filtered.length}</span></h2>
           <p>Review project owners, schedules, addresses, and estimated costs.</p>
         </div>
-        <button type="button" className="primary-button" onClick={onAdd}>+ Add project</button>
+        <div className="dir-actions">
+          <input
+            className="dir-search"
+            type="search"
+            placeholder="Search projects…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search projects"
+          />
+          <button type="button" className="primary-button" onClick={onAdd}>+ Add project</button>
+        </div>
       </div>
       <div className="contractor-table-wrap">
-        {projects.length ? (
+        {filtered.length ? (
           <table className="contractor-table">
             <thead>
               <tr><th>Project</th><th>Owner</th><th>Phone</th><th>Address</th><th>Estimated cost</th><th>Start date</th><th>Description</th></tr>
             </thead>
             <tbody>
-              {projects.map((project) => (
+              {filtered.map((project) => (
                 <tr key={project.id}>
                   <td><strong>{project.name}</strong></td>
                   <td>{project.owner_name || '—'}</td>
@@ -42,11 +63,12 @@ export function ProjectDirectory({ projects, onAdd }) {
               ))}
             </tbody>
           </table>
-        ) : <p className="empty-state">No projects saved yet.</p>}
+        ) : <p className="empty-state">{query ? 'No projects match your search.' : 'No projects saved yet.'}</p>}
       </div>
     </section>
   )
 }
+
 
 export function ProjectForm({ form, setForm, onSubmit, close }) {
   return <Modal title="New project" eyebrow="Workspace" close={close} onSubmit={onSubmit}>

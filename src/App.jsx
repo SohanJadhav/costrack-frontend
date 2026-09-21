@@ -54,6 +54,50 @@ function money(amount) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0)
 }
 
+function ContractorFilterCombo({ options, value, onChange }) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const query = search.toLowerCase()
+  const allOptions = ['all', ...options]
+  const filtered = query
+    ? allOptions.filter((name) => name.toLowerCase().includes(query))
+    : allOptions
+  const label = value === 'all' ? 'All contractors' : value
+
+  function pick(name) {
+    onChange(name)
+    setSearch('')
+    setOpen(false)
+  }
+
+  return (
+    <div className="combo-wrap">
+      <input
+        className="combo-input combo-filter"
+        placeholder={label}
+        value={open ? search : label}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => { setSearch(e.target.value); setOpen(true) }}
+        aria-label="Filter by contractor"
+      />
+      {open && (
+        <ul className="combo-list">
+          {filtered.length ? filtered.map((name) => (
+            <li
+              key={name}
+              className={`combo-item${value === name ? ' selected' : ''}`}
+              onMouseDown={() => pick(name)}
+            >
+              {name === 'all' ? 'All contractors' : name}
+            </li>
+          )) : <li className="combo-empty">No matches</li>}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(() => {
     try {
@@ -69,11 +113,13 @@ function App() {
   const [projectPayments, setProjectPayments] = useState([])
   const [contractorPayments, setContractorPayments] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [selectedContractor, setSelectedContractor] = useState('all')
+  const [projectSearch, setProjectSearch] = useState('')
   const [modal, setModal] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [projectForm, setProjectForm] = useState({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
-  const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, description: '' })
+  const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: '', description: '' })
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
@@ -163,6 +209,7 @@ function App() {
   useEffect(() => {
     if (selectedProjectId) {
       loadProjectDetails(selectedProjectId)
+      setSelectedContractor('all')
     }
   }, [selectedProjectId])
 
@@ -172,185 +219,313 @@ function App() {
   const projectBalance = 0
   const projectInitials = useMemo(() => selectedProject?.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase() || '', [selectedProject])
 
-  async function exportProjectReport() {
+  const contractorFilterOptions = useMemo(() => {
+    const names = new Set()
+    projectContractors.forEach((contractor) => {
+      if (contractor.contractor_name) {
+        names.add(contractor.contractor_name)
+      }
+    })
+    contractors.forEach((contractor) => {
+      if (contractor.name) {
+        names.add(contractor.name)
+      }
+    })
+    return Array.from(names).sort((a, b) => a.localeCompare(b))
+  }, [projectContractors, contractors])
+
+  const filteredContractors = useMemo(() => {
+    if (selectedContractor === 'all') {
+      return projectContractors
+    }
+    return projectContractors.filter(
+      (contractor) => contractor.contractor_name === selectedContractor
+    )
+  }, [projectContractors, selectedContractor])
+
+  const filteredProjects = useMemo(() => {
+    const q = projectSearch.trim().toLowerCase()
+    if (!q) return projects
+    return projects.filter(
+      (p) =>
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.address || '').toLowerCase().includes(q) ||
+        (p.owner_name || '').toLowerCase().includes(q)
+    )
+  }, [projects, projectSearch])
+
+  async function fetchLatestPayments() {
+    if (!selectedProject) return null
+    const [ownerPaymentsResponse, contractorPaymentResponses] = await Promise.all([
+      fetch(`${API_BASE}/projects/${selectedProject.id}/payments`),
+      Promise.all(projectContractors.map(async (contractor) => {
+        const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractor.contractor_id}/payments`)
+        if (!response.ok) throw new Error(`Payments for ${contractor.contractor_name} could not be loaded`)
+        const summary = await response.json()
+        return (summary.payments || []).map((payment) => normalizePayment(payment, contractor.contractor_id))
+      })),
+    ])
+    if (!ownerPaymentsResponse.ok) throw new Error('Owner payments could not be loaded')
+    const latestOwnerPayments = (await ownerPaymentsResponse.json()).map(normalizePayment)
+    const latestContractorPayments = contractorPaymentResponses.flat()
+    setProjectPayments(latestOwnerPayments)
+    setContractorPayments(latestContractorPayments)
+    return { latestOwnerPayments, latestContractorPayments }
+  }
+
+  function openPrintWindow(html, title) {
+    const printWindow = window.open('', '_blank', 'width=1000,height=800')
+    if (!printWindow) {
+      setError('Popup blocked. Please allow popups to export the project report.')
+      return false
+    }
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+    return true
+  }
+
+  function buildReportStyles() {
+    return `
+      body { font-family: Arial, sans-serif; margin: 0; background: #fff; color: #1f1f1f; }
+      .report-page { max-width: 980px; margin: 0 auto; padding: 40px 32px 48px; }
+      .header { border-bottom: 2px solid #e77b54; padding-bottom: 18px; margin-bottom: 24px; }
+      .eyebrow { text-transform: uppercase; letter-spacing: 1.8px; color: #7d766d; font-size: 11px; }
+      h1 { font-size: 28px; margin: 8px 0 6px; }
+      .meta { color: #5f5a54; font-size: 13px; }
+      .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 26px 0 30px; }
+      .card { border: 1px solid #e8e0d8; border-radius: 8px; padding: 16px; background: #fffaf6; }
+      .label { color: #756f68; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+      .value { font-size: 22px; font-weight: 700; margin-top: 8px; }
+      .section { margin-top: 32px; }
+      .section h2 { font-size: 20px; margin: 0 0 12px; border-bottom: 1px solid #e7e1d9; padding-bottom: 8px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { padding: 11px 10px; border-bottom: 1px solid #efe9e3; text-align: left; vertical-align: top; }
+      th { background: #f5f1ec; color: #524f4a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.9px; }
+      td.amount { text-align: right; font-weight: 700; }
+      tr.total-row td { background: #f9e5d9; font-weight: 700; border-top: 2px solid #e77b54; border-bottom: none; }
+      tr.total-row td.amount { text-align: right; }
+      .empty { color: #726d68; font-style: italic; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    `
+  }
+
+  function buildReportHeader(subtitle, formatDate) {
+    return `
+      <div class="header">
+        <div class="eyebrow">${subtitle}</div>
+        <h1>${selectedProject.name}</h1>
+        <div class="meta">Owner: ${selectedProject.owner_name || 'Not set'} • ${selectedProject.address || 'Address not set'} • ${formatDate(selectedProject.start_date || today)}</div>
+      </div>
+    `
+  }
+
+  async function exportOwnerReport() {
     if (!selectedProject) return
-
     try {
-      const [ownerPaymentsResponse, contractorPaymentResponses] = await Promise.all([
-        fetch(`${API_BASE}/projects/${selectedProject.id}/payments`),
-        Promise.all(projectContractors.map(async (contractor) => {
-          const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractor.contractor_id}/payments`)
-          if (!response.ok) {
-            throw new Error(`Payments for ${contractor.contractor_name} could not be loaded`)
-          }
-          const summary = await response.json()
-          return (summary.payments || []).map((payment) => normalizePayment(payment, contractor.contractor_id))
-        })),
-      ])
-
-      if (!ownerPaymentsResponse.ok) throw new Error('Owner payments could not be loaded')
-
-      const latestOwnerPayments = (await ownerPaymentsResponse.json()).map(normalizePayment)
-      const latestContractorPayments = contractorPaymentResponses.flat()
-      setProjectPayments(latestOwnerPayments)
-      setContractorPayments(latestContractorPayments)
-
-      const incomingEntries = [...latestOwnerPayments]
-      .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
-      .map((payment) => ({
-        date: payment.date || payment.payment_date || today,
-        description: payment.description || payment.note || 'Payment received',
-        amount: Number(payment.amount || 0),
-      }))
-
-      const contractorEntries = [...latestContractorPayments]
-      .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
-      .map((payment) => {
-        const contractor = projectContractors.find((item) => item.contractor_id === payment.contractorId)
-        return {
-          date: payment.date || payment.payment_date || today,
-          contractorName: contractor?.contractor_name || 'Unknown contractor',
-          description: payment.description || payment.note || 'Contractor payment',
-          amount: Number(payment.amount || 0),
-        }
-      })
-
-      const incomingTotal = incomingEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
-      const outgoingTotal = contractorEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+      const result = await fetchLatestPayments()
+      if (!result) return
+      const { latestOwnerPayments } = result
 
       const formatCurrency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
       const formatDate = (value) => {
-      if (!value) return '—'
-      const date = new Date(value)
-      if (Number.isNaN(date.getTime())) return value
-      return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
+        if (!value) return '—'
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return value
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
       }
+
+      const incomingEntries = [...latestOwnerPayments]
+        .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
+        .map((payment) => ({
+          date: payment.date || payment.payment_date || today,
+          description: payment.description || payment.note || 'Payment received',
+          mode: payment.paymentMode || payment.payment_mode || 'cash',
+          amount: Number(payment.amount || 0),
+        }))
+
+      const incomingTotal = incomingEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+      const estimatedCost = selectedProject.estimated_cost !== '' ? Number(selectedProject.estimated_cost || 0) : 0
+      const balance = estimatedCost - incomingTotal
 
       const incomingRows = incomingEntries.length
-      ? incomingEntries.map((entry) => `
-          <tr>
-            <td>${formatDate(entry.date)}</td>
-            <td>${entry.description}</td>
-            <td>${formatCurrency(entry.amount)}</td>
-          </tr>`).join('')
-      : `
-          <tr>
-            <td colspan="3" class="empty">No incoming payments recorded yet</td>
-          </tr>`
-
-      const contractorRows = contractorEntries.length
-      ? contractorEntries.map((entry) => `
-          <tr>
-            <td>${formatDate(entry.date)}</td>
-            <td>${entry.contractorName}</td>
-            <td>${entry.description}</td>
-            <td>${formatCurrency(entry.amount)}</td>
-          </tr>`).join('')
-      : `
-          <tr>
-            <td colspan="4" class="empty">No contractor payments recorded yet</td>
-          </tr>`
+        ? incomingEntries.map((entry) => `
+            <tr>
+              <td>${formatDate(entry.date)}</td>
+              <td>${entry.description}</td>
+              <td>${entry.mode.replaceAll('_', ' ')}</td>
+              <td class="amount">${formatCurrency(entry.amount)}</td>
+            </tr>`).join('') + `
+            <tr class="total-row">
+              <td colspan="3">Total received</td>
+              <td class="amount">${formatCurrency(incomingTotal)}</td>
+            </tr>`
+        : `<tr><td colspan="4" class="empty">No incoming payments recorded yet</td></tr>`
 
       const reportHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${selectedProject.name} - Project Report</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 0; background: #fff; color: #1f1f1f; }
-            .report-page { max-width: 980px; margin: 0 auto; padding: 40px 32px 48px; }
-            .header { border-bottom: 2px solid #e77b54; padding-bottom: 18px; margin-bottom: 24px; }
-            .eyebrow { text-transform: uppercase; letter-spacing: 1.8px; color: #7d766d; font-size: 11px; }
-            h1 { font-size: 28px; margin: 8px 0 6px; }
-            .meta { color: #5f5a54; font-size: 13px; }
-            .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 26px 0 30px; }
-            .card { border: 1px solid #e8e0d8; border-radius: 8px; padding: 16px; background: #fffaf6; }
-            .label { color: #756f68; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-            .value { font-size: 22px; font-weight: 700; margin-top: 8px; }
-            .section { margin-top: 32px; }
-            .section h2 { font-size: 20px; margin: 0 0 12px; border-bottom: 1px solid #e7e1d9; padding-bottom: 8px; }
-            table { width: 100%; border-collapse: collapse; font-size: 13px; }
-            th, td { padding: 11px 10px; border-bottom: 1px solid #efe9e3; text-align: left; vertical-align: top; }
-            th { background: #f5f1ec; color: #524f4a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.9px; }
-            td.amount { text-align: right; font-weight: 700; }
-            .empty { color: #726d68; font-style: italic; }
-            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-          </style>
-        </head>
-        <body>
-          <div class="report-page">
-            <div class="header">
-              <div class="eyebrow">Project report</div>
-              <h1>${selectedProject.name}</h1>
-              <div class="meta">Owner: ${selectedProject.owner_name || 'Not set'} • ${selectedProject.address || 'Address not set'} • ${formatDate(selectedProject.start_date || today)}</div>
-            </div>
-
-            <div class="summary-grid">
-              <div class="card">
-                <div class="label">Project payments</div>
-                <div class="value">${formatCurrency(incomingTotal)}</div>
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${selectedProject.name} – Received Payments</title>
+            <style>${buildReportStyles()}</style>
+          </head>
+          <body>
+            <div class="report-page">
+              ${buildReportHeader('Received payments report', formatDate)}
+              <div class="summary-grid">
+                <div class="card">
+                  <div class="label">Estimated cost</div>
+                  <div class="value">${estimatedCost === 0 ? 'Not set' : formatCurrency(estimatedCost)}</div>
+                </div>
+                <div class="card">
+                  <div class="label">Total received from owner</div>
+                  <div class="value">${formatCurrency(incomingTotal)}</div>
+                </div>
+                <div class="card">
+                  <div class="label">Balance due</div>
+                  <div class="value">${estimatedCost === 0 ? '—' : formatCurrency(balance)}</div>
+                </div>
               </div>
-              <div class="card">
-                <div class="label">Received from owner</div>
-                <div class="value">${formatCurrency(incomingTotal)}</div>
-              </div>
-              <div class="card">
-                <div class="label">Paid to contractors</div>
-                <div class="value">${formatCurrency(outgoingTotal)}</div>
+              <div class="section">
+                <h2>Payments received for project</h2>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Mode</th>
+                      <th class="amount">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${incomingRows}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            <div class="section">
-              <h2>1) Payments received for project</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th class="amount">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${incomingRows}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="section">
-              <h2>2) Payments made to contractors</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Contractor</th>
-                    <th>Description</th>
-                    <th class="amount">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${contractorRows}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </body>
-      </html>
-    `
-
-      const printWindow = window.open('', '_blank', 'width=1000,height=800')
-      if (!printWindow) {
-        setError('Popup blocked. Please allow popups to export the project report.')
-        return
-      }
-
-      printWindow.document.write(reportHtml)
-      printWindow.document.close()
-      printWindow.focus()
-      setTimeout(() => printWindow.print(), 250)
+          </body>
+        </html>
+      `
+      openPrintWindow(reportHtml, `${selectedProject.name} – Received Payments`)
     } catch (exportError) {
       setError(exportError.message)
     }
   }
+
+  async function exportContractorReport() {
+    if (!selectedProject) return
+    try {
+      const result = await fetchLatestPayments()
+      if (!result) return
+      const { latestContractorPayments } = result
+
+      const formatCurrency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
+      const formatDate = (value) => {
+        if (!value) return '—'
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return value
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
+      }
+
+      // Identify which contractor IDs belong to the selected filter
+      const filteredContractorIds = selectedContractor === 'all'
+        ? null
+        : projectContractors
+            .filter((c) => c.contractor_name === selectedContractor)
+            .map((c) => c.contractor_id)
+
+      const contractorEntries = [...latestContractorPayments]
+        .filter((payment) => {
+          if (!filteredContractorIds) return true
+          return filteredContractorIds.includes(payment.contractorId)
+        })
+        .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
+        .map((payment) => {
+          const contractor = projectContractors.find((item) => item.contractor_id === payment.contractorId)
+          return {
+            date: payment.date || payment.payment_date || today,
+            contractorName: contractor?.contractor_name || 'Unknown contractor',
+            description: payment.description || payment.note || 'Contractor payment',
+            amount: Number(payment.amount || 0),
+          }
+        })
+
+      const outgoingTotal = contractorEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+
+      // Count unique contractors in the filtered results
+      const uniqueContractorNames = new Set(contractorEntries.map((e) => e.contractorName))
+      const contractorCount = uniqueContractorNames.size
+
+      const isFiltered = selectedContractor !== 'all'
+      const reportSubtitle = isFiltered
+        ? `Contractor payments report — ${selectedContractor}`
+        : 'Contractor payments report'
+      const pdfTitle = isFiltered
+        ? `${selectedProject.name} – ${selectedContractor} Payments`
+        : `${selectedProject.name} – Contractor Payments`
+
+      // When a single contractor is selected, hide the Contractor column (it's redundant)
+      const tableHead = isFiltered
+        ? `<tr><th>Date</th><th>Description</th><th class="amount">Amount</th></tr>`
+        : `<tr><th>Date</th><th>Contractor</th><th>Description</th><th class="amount">Amount</th></tr>`
+
+      const contractorRows = contractorEntries.length
+        ? contractorEntries.map((entry) => isFiltered ? `
+            <tr>
+              <td>${formatDate(entry.date)}</td>
+              <td>${entry.description}</td>
+              <td class="amount">${formatCurrency(entry.amount)}</td>
+            </tr>` : `
+            <tr>
+              <td>${formatDate(entry.date)}</td>
+              <td>${entry.contractorName}</td>
+              <td>${entry.description}</td>
+              <td class="amount">${formatCurrency(entry.amount)}</td>
+            </tr>`).join('') + `
+            <tr class="total-row">
+              <td colspan="${isFiltered ? 2 : 3}">Total paid${isFiltered ? ` to ${selectedContractor}` : ' to contractors'}</td>
+              <td class="amount">${formatCurrency(outgoingTotal)}</td>
+            </tr>`
+        : `<tr><td colspan="${isFiltered ? 3 : 4}" class="empty">No contractor payments recorded yet</td></tr>`
+
+      const reportHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${pdfTitle}</title>
+            <style>${buildReportStyles()}</style>
+          </head>
+          <body>
+            <div class="report-page">
+              ${buildReportHeader(reportSubtitle, formatDate)}
+              <div class="summary-grid" style="grid-template-columns: repeat(2, minmax(0,1fr));">
+                <div class="card">
+                  <div class="label">${isFiltered ? 'Contractor' : 'Total contractors'}</div>
+                  <div class="value">${isFiltered ? selectedContractor : contractorCount}</div>
+                </div>
+                <div class="card">
+                  <div class="label">Total paid${isFiltered ? ` to ${selectedContractor}` : ' to contractors'}</div>
+                  <div class="value">${formatCurrency(outgoingTotal)}</div>
+                </div>
+              </div>
+              <div class="section">
+                <h2>Payments made to contractor${isFiltered ? '' : 's'}</h2>
+                <table>
+                  <thead>${tableHead}</thead>
+                  <tbody>${contractorRows}</tbody>
+                </table>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+      openPrintWindow(reportHtml, pdfTitle)
+    } catch (exportError) {
+      setError(exportError.message)
+    }
+  }
+
 
   async function addProject(event) {
     event.preventDefault()
@@ -402,6 +577,7 @@ function App() {
           amount: Number(contractorForm.amount || 0),
           payment_date: new Date(contractorForm.date).toISOString(),
           description: contractorForm.description.trim() || 'Contractor payment',
+          ...(contractorForm.paymentMode ? { payment_mode: contractorForm.paymentMode } : {}),
         }),
       })
 
@@ -410,7 +586,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to save contractor payment')
       }
 
-      setContractorForm({ contractorId: '', amount: '', date: today, description: '' })
+      setContractorForm({ contractorId: '', amount: '', date: today, paymentMode: '', description: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
@@ -418,6 +594,7 @@ function App() {
       setError(createError.message)
     }
   }
+
 
   async function createContractor(event) {
     event.preventDefault()
@@ -539,13 +716,24 @@ function App() {
       <div className="workspace-heading">
         <div>
           <span className="eyebrow">Project workspace</span>
-          <h2>Projects <span className="count">{projects.length}</span></h2>
+          <h2>Projects <span className="count">{filteredProjects.length}</span></h2>
         </div>
-        <button type="button" className="primary-button" onClick={() => setModal('project')}>+ New project</button>
+        <div className="dir-actions">
+          <input
+            className="dir-search"
+            type="search"
+            placeholder="Search projects…"
+            value={projectSearch}
+            onChange={(e) => setProjectSearch(e.target.value)}
+            aria-label="Search projects"
+          />
+          <button type="button" className="primary-button" onClick={() => setModal('project')}>+ New project</button>
+        </div>
       </div>
 
       <section className="project-layout">
-        <ProjectList projects={projects} selectedProjectId={selectedProject?.id} onSelect={setSelectedProjectId} onCreate={() => setModal('project')} />
+        <ProjectList projects={filteredProjects} selectedProjectId={selectedProject?.id} onSelect={setSelectedProjectId} onCreate={() => setModal('project')} />
+
 
         {selectedProject && <div className="detail-panel">
           <div className="detail-header">
@@ -568,12 +756,20 @@ function App() {
 
           <div className="section-head">
             <div>
-              <h3>Contractors & Expenses <span className="count">{projectContractors.length}</span></h3>
+              <h3>Contractors &amp; Expenses <span className="count">{filteredContractors.length}</span></h3>
               <p>People assigned to this project</p>
             </div>
-            <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Pay contractor</button>
+            <div className="section-actions">
+              <ContractorFilterCombo
+                options={contractorFilterOptions}
+                value={selectedContractor}
+                onChange={setSelectedContractor}
+              />
+              <button type="button" className="outline-button" onClick={exportContractorReport}>Export PDF</button>
+              <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Pay contractor</button>
+            </div>
           </div>
-          <ContractorList contractors={projectContractors} />
+          <ContractorList contractors={filteredContractors} />
 
           <div className="section-head expense-heading">
             <div>
@@ -581,7 +777,7 @@ function App() {
               <p>Installments received from the client</p>
             </div>
             <div className="section-actions">
-              <button type="button" className="outline-button" onClick={exportProjectReport}>Export PDF</button>
+              <button type="button" className="outline-button" onClick={exportOwnerReport}>Export PDF</button>
               <button type="button" className="outline-button" onClick={() => setModal('payment')}>+ Add payment</button>
             </div>
           </div>
