@@ -34,8 +34,31 @@ function normalizeContractorSummary(item) {
   }
 }
 
+function formatPaymentMode(mode) {
+  if (!mode) return 'Cash'
+  const clean = String(mode).trim().toLowerCase()
+  switch (clean) {
+    case 'cash':
+      return 'Cash'
+    case 'online':
+      return 'Online'
+    case 'upi':
+      return 'UPI'
+    case 'bank_transfer':
+    case 'bank transfer':
+      return 'Bank Transfer'
+    case 'cheque':
+      return 'Cheque'
+    case 'card':
+      return 'Card'
+    default:
+      return clean.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+}
+
 function normalizePayment(item, contractorId) {
   const dateValue = item.payment_date || item.date || today
+  const mode = item.payment_mode || item.paymentMode || item.mode || item.PaymentMode || 'cash'
   return {
     id: item.id,
     contractorId: item.contractor_id ?? item.contractorId ?? contractorId,
@@ -46,7 +69,8 @@ function normalizePayment(item, contractorId) {
     description: item.description || item.notes || item.note || 'Payment received',
     date: String(dateValue).slice(0, 10),
     payment_date: String(dateValue).slice(0, 10),
-    paymentMode: item.payment_mode || 'cash',
+    paymentMode: mode,
+    payment_mode: mode,
   }
 }
 
@@ -112,6 +136,7 @@ function App() {
   const [activeView, setActiveView] = useState('overview')
   const [projectPayments, setProjectPayments] = useState([])
   const [contractorPayments, setContractorPayments] = useState([])
+  const [totalSpend, setTotalSpend] = useState(0)
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [selectedContractor, setSelectedContractor] = useState('all')
   const [projectSearch, setProjectSearch] = useState('')
@@ -119,7 +144,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [projectForm, setProjectForm] = useState({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
-  const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: '', description: '' })
+  const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
@@ -138,6 +163,18 @@ function App() {
       setError('')
     } catch (loginError) {
       setError(loginError.message)
+    }
+  }
+
+  async function loadTotalSpend() {
+    try {
+      const response = await fetch(`${API_BASE}/payments/total-spend`)
+      if (response.ok) {
+        const data = await response.json()
+        setTotalSpend(Number(data.total_spend || 0))
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -204,6 +241,7 @@ function App() {
     if (!user) return
     loadProjects()
     loadContractors()
+    loadTotalSpend()
   }, [user])
 
   useEffect(() => {
@@ -215,7 +253,11 @@ function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0] || null
   const projectReceived = projectPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
-  const totalSpend = contractorPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+  const selectedProjectSpend = contractorPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+  const totalProjectsRevenue = useMemo(
+    () => projects.reduce((total, project) => total + Number(project.estimated_cost || 0), 0),
+    [projects]
+  )
   const projectBalance = 0
   const projectInitials = useMemo(() => selectedProject?.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase() || '', [selectedProject])
 
@@ -354,7 +396,7 @@ function App() {
             <tr>
               <td>${formatDate(entry.date)}</td>
               <td>${entry.description}</td>
-              <td>${entry.mode.replaceAll('_', ' ')}</td>
+              <td>${formatPaymentMode(entry.mode)}</td>
               <td class="amount">${formatCurrency(entry.amount)}</td>
             </tr>`).join('') + `
             <tr class="total-row">
@@ -376,7 +418,7 @@ function App() {
               <div class="summary-grid">
                 <div class="card">
                   <div class="label">Estimated cost</div>
-                  <div class="value">${estimatedCost === 0 ? 'Not set' : formatCurrency(estimatedCost)}</div>
+                  <div class="value">${estimatedCost === 0 ? 'Not Estimated' : formatCurrency(estimatedCost)}</div>
                 </div>
                 <div class="card">
                   <div class="label">Total received from owner</div>
@@ -384,7 +426,7 @@ function App() {
                 </div>
                 <div class="card">
                   <div class="label">Balance due</div>
-                  <div class="value">${estimatedCost === 0 ? '—' : formatCurrency(balance)}</div>
+                  <div class="value">${estimatedCost === 0 ? 'Not Estimated' : formatCurrency(balance)}</div>
                 </div>
               </div>
               <div class="section">
@@ -447,6 +489,7 @@ function App() {
             date: payment.date || payment.payment_date || today,
             contractorName: contractor?.contractor_name || 'Unknown contractor',
             description: payment.description || payment.note || 'Contractor payment',
+            mode: payment.paymentMode || payment.payment_mode || 'cash',
             amount: Number(payment.amount || 0),
           }
         })
@@ -467,27 +510,29 @@ function App() {
 
       // When a single contractor is selected, hide the Contractor column (it's redundant)
       const tableHead = isFiltered
-        ? `<tr><th>Date</th><th>Description</th><th class="amount">Amount</th></tr>`
-        : `<tr><th>Date</th><th>Contractor</th><th>Description</th><th class="amount">Amount</th></tr>`
+        ? `<tr><th>Date</th><th>Description</th><th>Mode</th><th class="amount">Amount</th></tr>`
+        : `<tr><th>Date</th><th>Contractor</th><th>Description</th><th>Mode</th><th class="amount">Amount</th></tr>`
 
       const contractorRows = contractorEntries.length
         ? contractorEntries.map((entry) => isFiltered ? `
             <tr>
               <td>${formatDate(entry.date)}</td>
               <td>${entry.description}</td>
+              <td>${formatPaymentMode(entry.mode)}</td>
               <td class="amount">${formatCurrency(entry.amount)}</td>
             </tr>` : `
             <tr>
               <td>${formatDate(entry.date)}</td>
               <td>${entry.contractorName}</td>
               <td>${entry.description}</td>
+              <td>${formatPaymentMode(entry.mode)}</td>
               <td class="amount">${formatCurrency(entry.amount)}</td>
             </tr>`).join('') + `
             <tr class="total-row">
-              <td colspan="${isFiltered ? 2 : 3}">Total paid${isFiltered ? ` to ${selectedContractor}` : ' to contractors'}</td>
+              <td colspan="${isFiltered ? 3 : 4}">Total paid${isFiltered ? ` to ${selectedContractor}` : ' to contractors'}</td>
               <td class="amount">${formatCurrency(outgoingTotal)}</td>
             </tr>`
-        : `<tr><td colspan="${isFiltered ? 3 : 4}" class="empty">No contractor payments recorded yet</td></tr>`
+        : `<tr><td colspan="${isFiltered ? 4 : 5}" class="empty">No contractor payments recorded yet</td></tr>`
 
       const reportHtml = `
         <!DOCTYPE html>
@@ -568,7 +613,6 @@ function App() {
   async function addContractor(event) {
     event.preventDefault()
     if (!selectedProject || !contractorForm.contractorId || !contractorForm.amount || !contractorForm.description.trim()) return
-
     try {
       const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractorForm.contractorId}/payments`, {
         method: 'POST',
@@ -577,7 +621,7 @@ function App() {
           amount: Number(contractorForm.amount || 0),
           payment_date: new Date(contractorForm.date).toISOString(),
           description: contractorForm.description.trim() || 'Contractor payment',
-          ...(contractorForm.paymentMode ? { payment_mode: contractorForm.paymentMode } : {}),
+          payment_mode: contractorForm.paymentMode || 'cash',
         }),
       })
 
@@ -586,14 +630,16 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to save contractor payment')
       }
 
-      setContractorForm({ contractorId: '', amount: '', date: today, paymentMode: '', description: '' })
+      setContractorForm({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
+      await loadTotalSpend()
     } catch (createError) {
       setError(createError.message)
     }
   }
+
 
 
   async function createContractor(event) {
@@ -708,9 +754,20 @@ function App() {
 
       {activeView === 'contractors' ? <ContractorDirectory contractors={contractors} onAdd={() => setModal('new-contractor')} /> : activeView === 'projects' ? <ProjectDirectory projects={projects} onAdd={() => setModal('project')} /> : <>
       <section className="summary-grid">
-        <div className="summary-card warm"><span>Total spend</span><strong>{money(totalSpend)}</strong><small><em>↗ 12.4%</em> from last month</small></div>
-        <div className="summary-card"><span>Active projects</span><strong>{projects.length}</strong><small><em className="green">●</em> All projects on track</small></div>
-        <div className="summary-card"><span>Contractors</span><strong>{projectContractors.length}</strong><small><em className="blue">●</em> Across your projects</small></div>
+        <div className="summary-card warm">
+          <span>Total spend in projects</span>
+          <strong>{money(totalSpend)}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Total active projects</span>
+          <strong>{projects.length}</strong>
+          <small><em className="green">●</em> All projects on track</small>
+        </div>
+        <div className="summary-card">
+          <span>Total projects revenue</span>
+          <strong>{money(totalProjectsRevenue)}</strong>
+          <small><em className="blue">●</em> Estimated project value</small>
+        </div>
       </section>
 
       <div className="workspace-heading">
@@ -749,9 +806,9 @@ function App() {
           </div>
 
           <div className="detail-stats">
-            <div><span>Estimated cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not set' : money(selectedProject.estimated_cost)}</strong></div>
+            <div><span>Estimated cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not Estimated' : money(selectedProject.estimated_cost)}</strong></div>
             <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
-            <div><span>Balance due</span><strong>{money(selectedProject.estimated_cost-projectReceived)}</strong></div>
+            <div><span>Balance due</span><strong>{selectedProject.estimated_cost > 0 ? money(selectedProject.estimated_cost - projectReceived) : 'N/A'}</strong></div>
           </div>
 
           <div className="section-head">

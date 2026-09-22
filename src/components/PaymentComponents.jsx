@@ -9,8 +9,8 @@ export function PaymentList({ payments }) {
       const formattedDate = dateValue
         ? new Date(`${String(dateValue).slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
         : 'Date not set'
-      const mode = payment.paymentMode || payment.payment_mode
-      const modeLabel = mode ? mode.replaceAll('_', ' ') : 'Payment received'
+      const mode = payment.paymentMode || payment.payment_mode || 'cash'
+      const modeLabel = formatModeName(mode)
 
       return <div className="payment-row" key={payment.id}>
         <span className="payment-date-badge" aria-hidden="true">₹</span>
@@ -64,15 +64,17 @@ export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
       <label>
         Mode
         <select
-          value={form.paymentMode}
+          value={form.paymentMode || 'cash'}
           onChange={(event) =>
             setForm({ ...form, paymentMode: event.target.value })
           }
         >
           <option value="cash">Cash</option>
+          <option value="online">Online</option>
           <option value="bank_transfer">Bank Transfer</option>
           <option value="cheque">Cheque</option>
           <option value="upi">UPI</option>
+          <option value="card">Card</option>
         </select>
       </label>
 
@@ -96,4 +98,26 @@ export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
 
 function money(amount) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0)
+}
+
+function formatModeName(mode) {
+  if (!mode) return 'Cash'
+  const clean = String(mode).trim().toLowerCase()
+  switch (clean) {
+    case 'cash':
+      return 'Cash'
+    case 'online':
+      return 'Online'
+    case 'upi':
+      return 'UPI'
+    case 'bank_transfer':
+    case 'bank transfer':
+      return 'Bank Transfer'
+    case 'cheque':
+      return 'Cheque'
+    case 'card':
+      return 'Card'
+    default:
+      return clean.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  }
 }

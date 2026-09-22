@@ -134,16 +134,17 @@ export function ContractorForm({
       </label>
 
       <label>
-        Payment mode
+        Mode
         <select
-          value={form.paymentMode || ''}
+          value={form.paymentMode || 'cash'}
           onChange={(event) => setForm({ ...form, paymentMode: event.target.value })}
         >
-          <option value="">— optional —</option>
           <option value="cash">Cash</option>
+          <option value="online">Online</option>
           <option value="bank_transfer">Bank Transfer</option>
           <option value="cheque">Cheque</option>
           <option value="upi">UPI</option>
+          <option value="card">Card</option>
         </select>
       </label>
 
