@@ -122,6 +122,7 @@ export function ContractorForm({
 }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const today = new Date().toLocaleDateString('en-CA')
   const query = search.toLowerCase()
   const list = Array.isArray(contractors) ? contractors : []
   const filtered = query ? list.filter((c) => (c.name || '').toLowerCase().includes(query)) : list
@@ -141,31 +142,33 @@ export function ContractorForm({
       onSubmit={onSubmit}
     >
       <p className="modal-intro">
-        Record a payment made to a contractor for this project.
+        Log a payment made to an assigned contractor.
       </p>
 
       <label>
-        Contractor *
+        Select contractor *
         <div className="combo-wrap">
           <input
             className="combo-input"
-            required
-            autoFocus
-            placeholder={selectedName || 'Search contractor…'}
-            value={open ? search : selectedName}
+            type="text"
+            placeholder={selectedName || 'Search or select contractor…'}
+            value={search || (open ? '' : selectedName)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setOpen(true)
+            }}
             onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
-            onChange={(e) => { setSearch(e.target.value); setOpen(true) }}
+            readOnly={false}
           />
           {open && (
             <ul className="combo-list">
               {filtered.length ? filtered.map((c) => (
                 <li
                   key={c.id}
-                  className={`combo-item${String(form.contractorId) === String(c.id) ? ' selected' : ''}`}
+                  className={`combo-item ${String(c.id) === String(form.contractorId) ? 'selected' : ''}`}
                   onMouseDown={() => pick(c.id)}
                 >
-                  {c.name}
+                  {c.name} {c.firm_name ? `(${c.firm_name})` : ''}
                 </li>
               )) : <li className="combo-empty">No contractors found</li>}
             </ul>
@@ -192,6 +195,7 @@ export function ContractorForm({
         <input
           type="date"
           required
+          max={today}
           value={form.date}
           onChange={(event) => setForm({ ...form, date: event.target.value })}
         />

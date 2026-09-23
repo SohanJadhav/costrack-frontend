@@ -44,6 +44,8 @@ export function PaymentList({ payments, onDeletePayment }) {
 
 
 export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
+  const today = new Date().toLocaleDateString('en-CA')
+
   return (
     <Modal
       title="Add received payment"
@@ -73,6 +75,7 @@ export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
         Received on
         <input
           type="date"
+          max={today}
           value={form.date}
           onChange={(event) =>
             setForm({ ...form, date: event.target.value })
