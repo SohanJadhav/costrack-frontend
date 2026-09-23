@@ -72,3 +72,8 @@
 .sub-payment-info small { font-size: 10px; color: #9b958c; }
 .sub-payment-amount { font-family: 'DM Mono', monospace; font-size: 11px; color: #3f3b35; white-space: nowrap; }
 .toggle-label { color: var(--coral) !important; font-weight: 500; font-size: 9px; cursor: pointer; display: block; margin-top: 2px; }
+.row-action-btns { display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; flex-shrink: 0; }
+.row-edit-btn { background: none; border: 0; color: #b5afa7; padding: 6px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all .15s ease; flex-shrink: 0; }
+.row-edit-btn:hover { background: #e8f3fe; color: #3b82f6; }
+.edit-project-badge-btn { border: 1px solid #e0d7cc; background: white; color: #6b645b; padding: 6px 12px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s ease; }
+.edit-project-badge-btn:hover { background: #faf7f2; border-color: var(--coral); color: var(--coral); }

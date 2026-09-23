@@ -711,6 +711,195 @@ function App() {
     }
   }
 
+  function startEditProject(p) {
+    if (!p) return
+    setProjectForm({
+      id: p.id,
+      name: p.name || '',
+      owner_name: p.owner_name || '',
+      phone_number: p.phone_number || '',
+      address: p.address || '',
+      estimated_cost: p.estimated_cost == null || p.estimated_cost === '' ? '' : String(p.estimated_cost),
+      description: p.description || '',
+      start_date: p.start_date ? String(p.start_date).slice(0, 10) : today,
+    })
+    setModal('project-edit')
+  }
+
+  async function updateProject(event) {
+    event.preventDefault()
+    if (!projectForm.id || !projectForm.name.trim() || !projectForm.address.trim()) return
+
+    try {
+      const payload = {
+        name: projectForm.name.trim(),
+        owner_name: projectForm.owner_name.trim(),
+        phone_number: projectForm.phone_number.trim(),
+        address: projectForm.address.trim(),
+        ...(projectForm.estimated_cost !== '' ? { estimated_cost: Number(projectForm.estimated_cost) } : {}),
+        description: projectForm.description.trim(),
+        start_date: projectForm.start_date ? new Date(projectForm.start_date).toISOString() : new Date().toISOString(),
+      }
+
+      const response = await fetch(`${API_BASE}/projects/${projectForm.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || 'Unable to update project')
+      }
+
+      const updated = await response.json()
+      const normalized = normalizeProject(updated)
+      setProjects((current) => current.map((p) => (p.id === normalized.id ? normalized : p)))
+      setProjectForm({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
+      setModal(null)
+      setError('')
+      await loadProjectDetails(normalized.id)
+    } catch (updateError) {
+      setError(updateError.message)
+    }
+  }
+
+  function startEditContractor(c) {
+    if (!c) return
+    setNewContractorForm({
+      id: c.id,
+      name: c.name || '',
+      firm_name: c.firm_name || '',
+      phone_number: c.phone_number || '',
+      firm_address: c.firm_address || '',
+      description: c.description || '',
+    })
+    setModal('contractor-edit')
+  }
+
+  async function updateContractor(event) {
+    event.preventDefault()
+    if (!newContractorForm.id || !newContractorForm.name.trim()) return
+
+    try {
+      const response = await fetch(`${API_BASE}/contractors/${newContractorForm.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newContractorForm.name.trim(),
+          firm_name: newContractorForm.firm_name.trim(),
+          phone_number: newContractorForm.phone_number.trim(),
+          firm_address: newContractorForm.firm_address.trim(),
+          description: newContractorForm.description.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || 'Unable to update contractor')
+      }
+
+      setNewContractorForm({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
+      await loadContractors()
+      setModal(null)
+      setError('')
+      if (selectedProjectId) await loadProjectDetails(selectedProjectId)
+    } catch (updateError) {
+      setError(updateError.message)
+    }
+  }
+
+  function startEditPayment(payment) {
+    if (!payment) return
+    setPaymentForm({
+      id: payment.id,
+      amount: String(payment.amount || ''),
+      date: payment.date || payment.payment_date || today,
+      paymentMode: payment.paymentMode || payment.payment_mode || 'cash',
+      note: payment.note || payment.description || '',
+    })
+    setModal('payment-edit')
+  }
+
+  async function updatePayment(event) {
+    event.preventDefault()
+    if (!paymentForm.id || !paymentForm.amount) return
+
+    try {
+      const payload = {
+        amount: Number(paymentForm.amount || 0),
+        payment_date: new Date(paymentForm.date).toISOString(),
+        description: paymentForm.note.trim() || 'Payment received',
+        payment_mode: paymentForm.paymentMode || 'cash',
+        reference_number: '',
+        notes: paymentForm.note.trim() || 'Payment received',
+      }
+
+      const response = await fetch(`${API_BASE}/project-payments/${paymentForm.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || 'Unable to update payment')
+      }
+
+      setPaymentForm({ amount: '', date: today, paymentMode: 'cash', note: '' })
+      setModal(null)
+      setError('')
+      if (selectedProjectId) await loadProjectDetails(selectedProjectId)
+    } catch (updateError) {
+      setError(updateError.message)
+    }
+  }
+
+  function startEditContractorPayment(payment) {
+    if (!payment) return
+    setContractorForm({
+      id: payment.id,
+      contractorId: payment.contractorId ?? payment.contractor_id ?? '',
+      amount: String(payment.amount || ''),
+      date: payment.date || payment.payment_date || today,
+      paymentMode: payment.paymentMode || payment.payment_mode || 'cash',
+      description: payment.description || payment.note || '',
+    })
+    setModal('contractor-payment-edit')
+  }
+
+  async function updateContractorPayment(event) {
+    event.preventDefault()
+    if (!contractorForm.id || !contractorForm.amount || !contractorForm.contractorId) return
+
+    try {
+      const response = await fetch(`${API_BASE}/contractor-payments/${contractorForm.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractor_id: Number(contractorForm.contractorId),
+          amount: Number(contractorForm.amount || 0),
+          payment_date: new Date(contractorForm.date).toISOString(),
+          description: contractorForm.description.trim() || 'Contractor payment',
+          payment_mode: contractorForm.paymentMode || 'cash',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || 'Unable to update contractor payment')
+      }
+
+      setContractorForm({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
+      setModal(null)
+      setError('')
+      if (selectedProjectId) await loadProjectDetails(selectedProjectId)
+      await loadTotalSpend()
+    } catch (updateError) {
+      setError(updateError.message)
+    }
+  }
+
   async function handleConfirmDelete() {
     if (!deleteConfirm || !deleteConfirm.payment) return
     const { payment, type } = deleteConfirm
@@ -798,7 +987,19 @@ function App() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      {activeView === 'contractors' ? <ContractorDirectory contractors={contractors} onAdd={() => setModal('new-contractor')} /> : activeView === 'projects' ? <ProjectDirectory projects={projects} onAdd={() => setModal('project')} /> : <>
+      {activeView === 'contractors' ? (
+        <ContractorDirectory
+          contractors={contractors}
+          onAdd={() => setModal('new-contractor')}
+          onEdit={(c) => startEditContractor(c)}
+        />
+      ) : activeView === 'projects' ? (
+        <ProjectDirectory
+          projects={projects}
+          onAdd={() => setModal('project')}
+          onEdit={(p) => startEditProject(p)}
+        />
+      ) : <>
       <section className="summary-grid">
         <div className="summary-card warm">
           <span>Total spend in projects</span>
@@ -848,7 +1049,17 @@ function App() {
                 <p>{selectedProject.location}</p>
               </div>
             </div>
-            <button type="button" className="more-button">•••</button>
+            <button
+              type="button"
+              className="edit-project-badge-btn"
+              title="Edit project details"
+              onClick={() => startEditProject(selectedProject)}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+              </svg>
+              Edit project
+            </button>
           </div>
 
           <div className="detail-stats">
@@ -875,6 +1086,7 @@ function App() {
           <ContractorList
             contractors={filteredContractors}
             payments={contractorPayments}
+            onEditPayment={(payment) => startEditContractorPayment(payment)}
             onDeletePayment={(payment) => setDeleteConfirm({ payment, type: 'contractor' })}
           />
 
@@ -890,6 +1102,7 @@ function App() {
           </div>
           <PaymentList
             payments={projectPayments}
+            onEditPayment={(payment) => startEditPayment(payment)}
             onDeletePayment={(payment) => setDeleteConfirm({ payment, type: 'project' })}
           />
         </div>}
@@ -897,9 +1110,12 @@ function App() {
       </>}
     </main>
 
-    {modal === 'project' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={addProject} close={() => setModal(null)} />}
-    {modal === 'new-contractor' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={createContractor} close={() => setModal(null)} />}
-    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} />}
+    {modal === 'project' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={addProject} close={() => setModal(null)} isEdit={false} />}
+    {modal === 'project-edit' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={updateProject} close={() => setModal(null)} isEdit={true} />}
+    {modal === 'new-contractor' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={createContractor} close={() => setModal(null)} isEdit={false} />}
+    {modal === 'contractor-edit' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={updateContractor} close={() => setModal(null)} isEdit={true} />}
+    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} isEdit={false} />}
+    {modal === 'contractor-payment-edit' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={updateContractorPayment} close={() => setModal(null)} isEdit={true} />}
     {modal === 'expense' && <ExpenseForm projectName={selectedProject?.name} contractors={projectContractors} form={expenseForm} setForm={setExpenseForm} onSubmit={(event) => {
       event.preventDefault()
       if (!selectedProject || !expenseForm.contractorId || !expenseForm.amount) return
@@ -913,7 +1129,8 @@ function App() {
       setModal('payment')
       setExpenseForm({ contractorId: '', amount: '', description: '' })
     }} close={() => setModal(null)} />}
-    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} />}
+    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} isEdit={false} />}
+    {modal === 'payment-edit' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={updatePayment} close={() => setModal(null)} isEdit={true} />}
 
     {deleteConfirm && (
       <ConfirmModal

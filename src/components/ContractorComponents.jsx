@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Modal from './Modal'
 
-export function ContractorList({ contractors, payments = [], onDeletePayment }) {
+export function ContractorList({ contractors, payments = [], onEditPayment, onDeletePayment }) {
   const [expandedContractors, setExpandedContractors] = useState({})
 
   const toggleExpand = (contractorId) => {
@@ -79,23 +79,43 @@ export function ContractorList({ contractors, payments = [], onDeletePayment }) 
                           <small>{formattedDate} · {formatModeName(mode)}</small>
                         </span>
                         <strong className="sub-payment-amount">{money(payment.amount)}</strong>
-                        {onDeletePayment && (
-                          <button
-                            type="button"
-                            className="row-delete-btn"
-                            title="Delete payment"
-                            aria-label={`Delete payment of ${money(payment.amount)}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onDeletePayment(payment)
-                            }}
-                          >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        )}
+                        <div className="row-action-btns">
+                          {onEditPayment && (
+                            <button
+                              type="button"
+                              className="row-edit-btn"
+                              title="Edit payment"
+                              aria-label={`Edit payment of ${money(payment.amount)}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                onEditPayment(payment)
+                              }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                              </svg>
+                            </button>
+                          )}
+                          {onDeletePayment && (
+                            <button
+                              type="button"
+                              className="row-delete-btn"
+                              title="Delete payment"
+                              aria-label={`Delete payment of ${money(payment.amount)}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                onDeletePayment(payment)
+                              }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
@@ -119,6 +139,7 @@ export function ContractorForm({
   setForm,
   onSubmit,
   close,
+  isEdit = false,
 }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
@@ -136,13 +157,13 @@ export function ContractorForm({
 
   return (
     <Modal
-      title="Pay contractor"
+      title={isEdit ? "Edit contractor payment" : "Pay contractor"}
       eyebrow={projectName}
       close={close}
       onSubmit={onSubmit}
     >
       <p className="modal-intro">
-        Log a payment made to an assigned contractor.
+        {isEdit ? "Update details of this payment made to the contractor." : "Log a payment made to an assigned contractor."}
       </p>
 
       <label>
@@ -230,14 +251,14 @@ export function ContractorForm({
       />
 
       <button type="submit" className="primary-button full">
-        Pay contractor
+        {isEdit ? "Update payment" : "Pay contractor"}
       </button>
     </Modal>
   );
 }
 
 
-export function ContractorDirectory({ contractors, onAdd }) {
+export function ContractorDirectory({ contractors, onAdd, onEdit }) {
   const [search, setSearch] = useState('')
   const query = search.trim().toLowerCase()
   const filtered = query
@@ -273,7 +294,14 @@ export function ContractorDirectory({ contractors, onAdd }) {
         {filtered.length ? (
           <table className="contractor-table">
             <thead>
-              <tr><th>Name</th><th>Firm name</th><th>Phone number</th><th>Firm address</th><th>Description</th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Firm name</th>
+                <th>Phone number</th>
+                <th>Firm address</th>
+                <th>Description</th>
+                {onEdit && <th style={{ width: '60px', textAlign: 'center' }}>Actions</th>}
+              </tr>
             </thead>
             <tbody>
               {filtered.map((contractor) => (
@@ -283,6 +311,21 @@ export function ContractorDirectory({ contractors, onAdd }) {
                   <td>{contractor.phone_number || '—'}</td>
                   <td>{contractor.firm_address || '—'}</td>
                   <td>{contractor.description || '—'}</td>
+                  {onEdit && (
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className="row-edit-btn"
+                        title="Edit contractor"
+                        aria-label={`Edit ${contractor.name}`}
+                        onClick={() => onEdit(contractor)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                        </svg>
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -294,10 +337,12 @@ export function ContractorDirectory({ contractors, onAdd }) {
 }
 
 
-export function NewContractorForm({ form, setForm, onSubmit, close }) {
+export function NewContractorForm({ form, setForm, onSubmit, close, isEdit = false }) {
   return (
-    <Modal title="New contractor" eyebrow="Contractors" close={close} onSubmit={onSubmit}>
-      <p className="modal-intro">Save contractor details for future project payments.</p>
+    <Modal title={isEdit ? "Edit contractor" : "New contractor"} eyebrow="Contractors" close={close} onSubmit={onSubmit}>
+      <p className="modal-intro">
+        {isEdit ? "Update contractor profile and contact information." : "Save contractor details for future project payments."}
+      </p>
 
       <label>
         Name *
@@ -324,7 +369,9 @@ export function NewContractorForm({ form, setForm, onSubmit, close }) {
         <textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Trade or work speciality" rows="3" style={{ width: '100%' }} />
       </label>
 
-      <button type="submit" className="primary-button full">Save contractor</button>
+      <button type="submit" className="primary-button full">
+        {isEdit ? "Update contractor" : "Save contractor"}
+      </button>
     </Modal>
   )
 }

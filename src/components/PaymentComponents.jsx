@@ -1,6 +1,6 @@
 import Modal from './Modal'
 
-export function PaymentList({ payments, onDeletePayment }) {
+export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
   const entries = Array.isArray(payments) ? payments.slice().reverse() : []
 
   return <div className="payment-list">
@@ -19,42 +19,61 @@ export function PaymentList({ payments, onDeletePayment }) {
           <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}</small>
         </span>
         <strong className="payment-amount">{money(payment.amount)}</strong>
-        {onDeletePayment && (
-          <button
-            type="button"
-            className="row-delete-btn"
-            title="Delete payment"
-            aria-label={`Delete payment of ${money(payment.amount)}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              onDeletePayment(payment)
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-          </button>
-        )}
+        <div className="row-action-btns">
+          {onEditPayment && (
+            <button
+              type="button"
+              className="row-edit-btn"
+              title="Edit payment"
+              aria-label={`Edit payment of ${money(payment.amount)}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onEditPayment(payment)
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+              </svg>
+            </button>
+          )}
+          {onDeletePayment && (
+            <button
+              type="button"
+              className="row-delete-btn"
+              title="Delete payment"
+              aria-label={`Delete payment of ${money(payment.amount)}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onDeletePayment(payment)
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     }) : <div className="payment-empty"><span className="payment-empty-icon">+</span><strong>No payments received yet</strong><small>Owner installments will appear here.</small></div>}
   </div>
 }
 
 
-export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
+export function PaymentForm({ projectName, form, setForm, onSubmit, close, isEdit = false }) {
   const today = new Date().toLocaleDateString('en-CA')
 
   return (
     <Modal
-      title="Add received payment"
+      title={isEdit ? "Edit received payment" : "Add received payment"}
       eyebrow={projectName}
       close={close}
       onSubmit={onSubmit}
     >
       <p className="modal-intro">
-        Record an installment received from the project owner.
+        {isEdit ? "Update details of this installment received from the owner." : "Record an installment received from the project owner."}
       </p>
 
       <label>
@@ -112,7 +131,7 @@ export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
       </label>
 
       <button type="submit" className="primary-button full">
-        Save payment
+        {isEdit ? "Update payment" : "Save payment"}
       </button>
     </Modal>
   );

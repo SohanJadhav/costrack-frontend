@@ -12,7 +12,7 @@ export function ProjectList({ projects, selectedProjectId, onSelect, onCreate })
   </div>
 }
 
-export function ProjectDirectory({ projects, onAdd }) {
+export function ProjectDirectory({ projects, onAdd, onEdit }) {
   const [search, setSearch] = useState('')
   const query = search.trim().toLowerCase()
   const filtered = query
@@ -47,7 +47,16 @@ export function ProjectDirectory({ projects, onAdd }) {
         {filtered.length ? (
           <table className="contractor-table">
             <thead>
-              <tr><th>Project</th><th>Owner</th><th>Phone</th><th>Address</th><th>Estimated cost</th><th>Start date</th><th>Description</th></tr>
+              <tr>
+                <th>Project</th>
+                <th>Owner</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Estimated cost</th>
+                <th>Start date</th>
+                <th>Description</th>
+                {onEdit && <th style={{ width: '60px', textAlign: 'center' }}>Actions</th>}
+              </tr>
             </thead>
             <tbody>
               {filtered.map((project) => (
@@ -59,6 +68,21 @@ export function ProjectDirectory({ projects, onAdd }) {
                   <td>{project.estimated_cost === '' ? '—' : money(project.estimated_cost)}</td>
                   <td>{project.start_date ? new Date(project.start_date).toLocaleDateString('en-IN') : '—'}</td>
                   <td>{project.description || '—'}</td>
+                  {onEdit && (
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className="row-edit-btn"
+                        title="Edit project"
+                        aria-label={`Edit ${project.name}`}
+                        onClick={() => onEdit(project)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                        </svg>
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -70,31 +94,31 @@ export function ProjectDirectory({ projects, onAdd }) {
 }
 
 
-export function ProjectForm({ form, setForm, onSubmit, close }) {
-  return <Modal title="New project" eyebrow="Workspace" close={close} onSubmit={onSubmit}>
-    <label>Project name<input required autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Oak Street build" /></label>
+export function ProjectForm({ form, setForm, onSubmit, close, isEdit = false }) {
+  return <Modal title={isEdit ? "Edit project" : "New project"} eyebrow="Workspace" close={close} onSubmit={onSubmit}>
+    <label>Project name *<input required autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Oak Street build" /></label>
     <label>Owner name<input value={form.owner_name} onChange={(event) => setForm({ ...form, owner_name: event.target.value })} placeholder="e.g. Alex Smith" /></label>
     <label>
-  Phone number
-  <input
-    type="tel"
-    value={form.phone_number}
-    onChange={(event) =>
-      setForm({
-        ...form,
-        phone_number: event.target.value.replace(/\D/g, '').slice(0, 10),
-      })
-    }
-    placeholder="e.g. 9876543210"
-    maxLength={10}
-    inputMode="numeric"
-  />
-</label>
-    <label>Address<input required value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="e.g. Bengaluru" /></label>
+      Phone number
+      <input
+        type="tel"
+        value={form.phone_number}
+        onChange={(event) =>
+          setForm({
+            ...form,
+            phone_number: event.target.value.replace(/\D/g, '').slice(0, 10),
+          })
+        }
+        placeholder="e.g. 9876543210"
+        maxLength={10}
+        inputMode="numeric"
+      />
+    </label>
+    <label>Address *<input required value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="e.g. Bengaluru" /></label>
     <label>Estimated cost (optional)<input type="number" min="0" value={form.estimated_cost} onChange={(event) => setForm({ ...form, estimated_cost: event.target.value })} placeholder="e.g. 1000000" /></label>
     <label>Start date<input type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} /></label>
     <label>Description </label><textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Project summary or scope" rows="3" style={{ width: '100%' }} />
-    <button type="submit" className="primary-button full">Create project</button>
+    <button type="submit" className="primary-button full">{isEdit ? "Update project" : "Create project"}</button>
   </Modal>
 }
 
