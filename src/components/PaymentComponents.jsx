@@ -1,6 +1,6 @@
 import Modal from './Modal'
 
-export function PaymentList({ payments }) {
+export function PaymentList({ payments, onDeletePayment }) {
   const entries = Array.isArray(payments) ? payments.slice().reverse() : []
 
   return <div className="payment-list">
@@ -19,10 +19,29 @@ export function PaymentList({ payments }) {
           <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}</small>
         </span>
         <strong className="payment-amount">{money(payment.amount)}</strong>
+        {onDeletePayment && (
+          <button
+            type="button"
+            className="row-delete-btn"
+            title="Delete payment"
+            aria-label={`Delete payment of ${money(payment.amount)}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              onDeletePayment(payment)
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        )}
       </div>
     }) : <div className="payment-empty"><span className="payment-empty-icon">+</span><strong>No payments received yet</strong><small>Owner installments will appear here.</small></div>}
   </div>
 }
+
 
 export function PaymentForm({ projectName, form, setForm, onSubmit, close }) {
   return (

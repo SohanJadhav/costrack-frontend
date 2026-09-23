@@ -53,3 +53,22 @@
 .login-card label { display: block; color: #555149; font-size: 11px; font-weight: 700; margin-top: 15px; }
 .login-card input { width: 100%; border: 1px solid #ddd6ce; border-radius: 5px; margin-top: 7px; padding: 12px; outline: none; background: white; color: var(--ink); font-size: 12px; box-sizing: border-box; }
 .login-card input:focus { border-color: var(--coral); box-shadow: 0 0 0 3px #f9e5d9; }
+
+/* Confirm Modal & Delete Styles */
+.confirm-modal { max-width: 440px; }
+.confirm-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.danger-button { background: #d94343 !important; color: white !important; }
+.danger-button:hover { background: #be3232 !important; }
+.row-delete-btn { background: none; border: 0; color: #b5afa7; padding: 6px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all .15s ease; flex-shrink: 0; margin-left: 8px; }
+.row-delete-btn:hover { background: #fee8e8; color: #d94343; }
+.contractor-card-wrap { border-bottom: 1px solid #f0ece6; }
+.contractor-card-wrap:last-child { border-bottom: 0; }
+.contractor-sub-payments { background: #faf8f5; border-radius: 6px; margin: 4px 0 10px 42px; padding: 6px 12px; border: 1px solid #eee8e0; }
+.contractor-sub-payment-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0ece6; }
+.contractor-sub-payment-row:last-child { border-bottom: 0; }
+.sub-payment-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--coral); flex-shrink: 0; }
+.sub-payment-info { flex: 1; min-width: 0; }
+.sub-payment-info strong { display: block; font-size: 11px; color: var(--ink); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.sub-payment-info small { font-size: 10px; color: #9b958c; }
+.sub-payment-amount { font-family: 'DM Mono', monospace; font-size: 11px; color: #3f3b35; white-space: nowrap; }
+.toggle-label { color: var(--coral) !important; font-weight: 500; font-size: 9px; cursor: pointer; display: block; margin-top: 2px; }

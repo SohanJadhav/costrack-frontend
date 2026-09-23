@@ -4,6 +4,7 @@ import { ContractorDirectory, ContractorForm, ContractorList, NewContractorForm 
 import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
 import { ProjectDirectory, ProjectForm, ProjectList } from './components/ProjectComponents'
+import { ConfirmModal } from './components/Modal'
 import Login from './components/Login'
 
 const API_BASE = 'http://localhost:8080/api/v1'
@@ -60,13 +61,13 @@ function normalizePayment(item, contractorId) {
   const dateValue = item.payment_date || item.date || today
   const mode = item.payment_mode || item.paymentMode || item.mode || item.PaymentMode || 'cash'
   return {
-    id: item.id,
-    contractorId: item.contractor_id ?? item.contractorId ?? contractorId,
-    projectId: item.project_id ?? item.projectId,
+    id: item.id ?? item.ID,
+    contractorId: item.contractor_id ?? item.contractorId ?? item.ContractorID ?? contractorId,
+    projectId: item.project_id ?? item.projectId ?? item.ProjectID,
     paymentType: item.payment_type || item.paymentType || 'contractor',
-    amount: Number(item.amount || 0),
-    note: item.notes || item.description || item.note || 'Payment received',
-    description: item.description || item.notes || item.note || 'Payment received',
+    amount: Number(item.amount || item.Amount || 0),
+    note: item.notes || item.description || item.note || item.Description || 'Payment received',
+    description: item.description || item.notes || item.note || item.Description || 'Payment received',
     date: String(dateValue).slice(0, 10),
     payment_date: String(dateValue).slice(0, 10),
     paymentMode: mode,
@@ -148,6 +149,8 @@ function App() {
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   async function login(credentials) {
     try {
@@ -708,6 +711,49 @@ function App() {
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!deleteConfirm || !deleteConfirm.payment) return
+    const { payment, type } = deleteConfirm
+    const paymentId = payment.id ?? payment.ID
+    if (!paymentId) {
+      setError('Cannot delete: payment ID not found')
+      setDeleteConfirm(null)
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const url = type === 'project'
+        ? `${API_BASE}/project-payments/${paymentId}`
+        : `${API_BASE}/contractor-payments/${paymentId}`
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok && response.status !== 204) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || `Unable to delete payment (status ${response.status})`)
+      }
+
+      setDeleteConfirm(null)
+      setError('')
+
+      const projectIdToReload = selectedProjectId || selectedProject?.id || payment.projectId || payment.project_id
+      if (projectIdToReload) {
+        await loadProjectDetails(projectIdToReload)
+      }
+      await loadTotalSpend()
+    } catch (delError) {
+      console.error('Delete payment error:', delError)
+      setError(delError.message)
+      setDeleteConfirm(null)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (!user) return <Login onLogin={login} error={error} />
 
   return <div className="app-shell">
@@ -826,7 +872,11 @@ function App() {
               <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Pay contractor</button>
             </div>
           </div>
-          <ContractorList contractors={filteredContractors} />
+          <ContractorList
+            contractors={filteredContractors}
+            payments={contractorPayments}
+            onDeletePayment={(payment) => setDeleteConfirm({ payment, type: 'contractor' })}
+          />
 
           <div className="section-head expense-heading">
             <div>
@@ -838,7 +888,10 @@ function App() {
               <button type="button" className="outline-button" onClick={() => setModal('payment')}>+ Add payment</button>
             </div>
           </div>
-          <PaymentList payments={projectPayments} />
+          <PaymentList
+            payments={projectPayments}
+            onDeletePayment={(payment) => setDeleteConfirm({ payment, type: 'project' })}
+          />
         </div>}
       </section>
       </>}
@@ -861,6 +914,17 @@ function App() {
       setExpenseForm({ contractorId: '', amount: '', description: '' })
     }} close={() => setModal(null)} />}
     {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} />}
+
+    {deleteConfirm && (
+      <ConfirmModal
+        title={`Delete ${deleteConfirm.type === 'contractor' ? 'Contractor' : 'Received'} Payment`}
+        eyebrow={selectedProject?.name || 'Confirmation'}
+        message={`Are you sure you want to delete this payment of ${money(deleteConfirm.payment?.amount)} (${deleteConfirm.payment?.description || deleteConfirm.payment?.note || 'Payment'})? This will update the project balance and overall spend.`}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+        isSubmitting={isDeleting}
+      />
+    )}
 
     {isLoading && <div className="loading-indicator">Loading projects...</div>}
   </div>
