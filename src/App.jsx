@@ -4,7 +4,7 @@ import { ContractorDirectory, ContractorForm, ContractorList, NewContractorForm 
 import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
 import { ProjectDirectory, ProjectForm, ProjectList } from './components/ProjectComponents'
-import { ConfirmModal } from './components/Modal'
+import { ConfirmModal, BackupModal } from './components/Modal'
 import Login from './components/Login'
 
 const API_BASE = 'http://localhost:8080/api/v1'
@@ -151,6 +151,43 @@ function App() {
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isBackingUp, setIsBackingUp] = useState(false)
+  const [backupResult, setBackupResult] = useState(null)
+
+  async function triggerBackup() {
+    setIsBackingUp(true)
+    setBackupResult(null)
+    setModal('backup')
+    try {
+      const response = await fetch(`${API_BASE}/backup/drive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setBackupResult({
+          success: false,
+          error: data.error?.message || 'Google Drive backup failed. Please check credentials configuration.',
+        })
+      } else {
+        setBackupResult({
+          success: true,
+          ...data,
+        })
+      }
+    } catch (err) {
+      setBackupResult({
+        success: false,
+        error: err.message || 'Network error occurred while uploading backup',
+      })
+    } finally {
+      setIsBackingUp(false)
+    }
+  }
+
+  function downloadBackupDirectly() {
+    window.open(`${API_BASE}/backup/download`, '_blank')
+  }
 
   async function login(credentials) {
     try {
@@ -969,6 +1006,29 @@ function App() {
           <h1>Good morning, {user.name} <span>✦</span></h1>
         </div>
         <div className="top-actions">
+          <button
+            type="button"
+            className="backup-button"
+            onClick={triggerBackup}
+            disabled={isBackingUp}
+            title="Upload SQLite database backup to Google Drive (costtracker07@gmail.com)"
+          >
+            {isBackingUp ? (
+              <>
+                <span className="backup-spinner" />
+                <span>Backing up...</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                <span>DB Backup</span>
+              </>
+            )}
+          </button>
           <button type="button" className="icon-button" aria-label="Notifications">♧<i /></button>
           <button type="button" className="avatar coral" aria-label="User profile">{user.name.slice(0, 2).toUpperCase()}</button>
           <button
@@ -1131,6 +1191,17 @@ function App() {
     }} close={() => setModal(null)} />}
     {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} isEdit={false} />}
     {modal === 'payment-edit' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={updatePayment} close={() => setModal(null)} isEdit={true} />}
+    {modal === 'backup' && (
+      <BackupModal
+        result={backupResult}
+        isLoading={isBackingUp}
+        onDownload={downloadBackupDirectly}
+        onClose={() => {
+          setModal(null)
+          setBackupResult(null)
+        }}
+      />
+    )}
 
     {deleteConfirm && (
       <ConfirmModal
