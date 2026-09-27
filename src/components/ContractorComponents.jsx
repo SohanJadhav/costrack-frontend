@@ -287,7 +287,7 @@ export function ContractorDirectory({ contractors, onAdd, onEdit }) {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search contractors"
           />
-          <button type="button" className="primary-button" onClick={onAdd}>+ Add contractor</button>
+          {onAdd && <button type="button" className="primary-button" onClick={onAdd}>+ Add contractor</button>}
         </div>
       </div>
       <div className="contractor-table-wrap">

@@ -123,13 +123,30 @@ function ContractorFilterCombo({ options, value, onChange }) {
   )
 }
 
+function getRoleBadgeLabel(role) {
+  switch (role) {
+    case 'admin':
+      return 'Admin'
+    case 'contractor_manager':
+      return 'Contractor Manager'
+    case 'viewer':
+      return 'Viewer'
+    default:
+      return role || 'Viewer'
+  }
+}
+
 function App() {
   const [user, setUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('costtrack-user'))
+      const stored = localStorage.getItem('costtrack-user')
+      if (stored) return JSON.parse(stored)
+      const match = document.cookie.match(/costtrack_user=([^;]+)/)
+      if (match) return JSON.parse(decodeURIComponent(match[1]))
     } catch {
       return null
     }
+    return null
   })
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
@@ -199,12 +216,39 @@ function App() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error?.message || 'Unable to sign in')
       localStorage.setItem('costtrack-user', JSON.stringify(data))
+      document.cookie = `costtrack_user=${encodeURIComponent(JSON.stringify(data))}; path=/; max-age=604800`
       setUser(data)
       setError('')
     } catch (loginError) {
       setError(loginError.message)
     }
   }
+
+  function logout() {
+    localStorage.removeItem('costtrack-user')
+    document.cookie = 'costtrack_user=; path=/; max-age=0'
+    setUser(null)
+    setError('')
+  }
+
+  useEffect(() => {
+    if (!user?.id) return
+    fetch(`${API_BASE}/users/${user.id}`)
+      .then((res) => {
+        if (res.ok) return res.json()
+        return null
+      })
+      .then((userData) => {
+        if (userData && (userData.role !== user.role || userData.name !== user.name)) {
+          const updated = { ...user, ...userData }
+          localStorage.setItem('costtrack-user', JSON.stringify(updated))
+          document.cookie = `costtrack_user=${encodeURIComponent(JSON.stringify(updated))}; path=/; max-age=604800`
+          setUser(updated)
+        }
+      })
+      .catch(() => {})
+  }, [user?.id])
+
 
   async function loadTotalSpend() {
     try {
@@ -300,6 +344,17 @@ function App() {
   )
   const projectBalance = 0
   const projectInitials = useMemo(() => selectedProject?.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase() || '', [selectedProject])
+
+  const role = user?.role || 'viewer'
+  const isAdmin = role === 'admin'
+  const isContractorManager = role === 'contractor_manager'
+  const isViewer = role === 'viewer'
+
+  const canManageProjects = isAdmin
+  const canManageOwnerPayments = isAdmin
+  const canManageContractors = isAdmin || isContractorManager
+  const canManageContractorPayments = isAdmin || isContractorManager
+  const canManageBackups = isAdmin
 
   const contractorFilterOptions = useMemo(() => {
     const names = new Set()
@@ -464,10 +519,11 @@ function App() {
                   <div class="label">Total received from owner</div>
                   <div class="value">${formatCurrency(incomingTotal)}</div>
                 </div>
+                ${estimatedCost > 0 && balance > 0 ? `
                 <div class="card">
                   <div class="label">Balance due</div>
-                  <div class="value">${estimatedCost === 0 ? 'Not Estimated' : formatCurrency(balance)}</div>
-                </div>
+                  <div class="value">${formatCurrency(balance)}</div>
+                </div>` : ''}
               </div>
               <div class="section">
                 <h2>Payments received for project</h2>
@@ -987,13 +1043,17 @@ function App() {
       <div className="brand"><span className="brand-mark">$</span><span>costrack</span></div>
       <div className="side-label">Workspace</div>
       <button type="button" className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} onClick={() => setActiveView('overview')}><span>◈</span>Overview</button>
-      <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects <b>+</b></button>
+      <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects {canManageProjects && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors</button>
       <div className="sidebar-bottom">
         <div className="side-label">Your workspace</div>
         <div className="profile">
-          <span className="avatar dark">AS</span>
-          <span><strong>{user.name}</strong><small>{user.username}</small></span>
+          <span className="avatar dark">{(user.name || 'U').slice(0, 2).toUpperCase()}</span>
+          <span className="profile-details">
+            <strong>{user.name}</strong>
+            <small>{user.username}</small>
+            <span className={`role-badge role-${role}`}>{getRoleBadgeLabel(role)}</span>
+          </span>
           <span className="dots">•••</span>
         </div>
       </div>
@@ -1006,39 +1066,40 @@ function App() {
           <h1>Good morning, {user.name} <span>✦</span></h1>
         </div>
         <div className="top-actions">
-          <button
-            type="button"
-            className="backup-button"
-            onClick={triggerBackup}
-            disabled={isBackingUp}
-            title="Upload SQLite database backup to Google Drive (costtracker07@gmail.com)"
-          >
-            {isBackingUp ? (
-              <>
-                <span className="backup-spinner" />
-                <span>Backing up...</span>
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-                <span>DB Backup</span>
-              </>
-            )}
-          </button>
+          {canManageBackups && (
+            <button
+              type="button"
+              className="backup-button"
+              onClick={triggerBackup}
+              disabled={isBackingUp}
+              title="Upload SQLite database backup to Google Drive (costtracker07@gmail.com)"
+            >
+              {isBackingUp ? (
+                <>
+                  <span className="backup-spinner" />
+                  <span>Backing up...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                  </svg>
+                  <span>DB Backup</span>
+                </>
+              )}
+            </button>
+          )}
           <button type="button" className="icon-button" aria-label="Notifications">♧<i /></button>
-          <button type="button" className="avatar coral" aria-label="User profile">{user.name.slice(0, 2).toUpperCase()}</button>
+          <div className="top-user-badge">
+            <button type="button" className="avatar coral" aria-label="User profile">{(user.name || 'U').slice(0, 2).toUpperCase()}</button>
+            <span className={`role-badge role-${role}`}>{getRoleBadgeLabel(role)}</span>
+          </div>
           <button
             type="button"
             className="logout-button"
-            onClick={() => {
-              localStorage.removeItem('costtrack-user')
-              setUser(null)
-              setError('')
-            }}
+            onClick={logout}
           >
             Log out
           </button>
@@ -1050,14 +1111,14 @@ function App() {
       {activeView === 'contractors' ? (
         <ContractorDirectory
           contractors={contractors}
-          onAdd={() => setModal('new-contractor')}
-          onEdit={(c) => startEditContractor(c)}
+          onAdd={canManageContractors ? () => setModal('new-contractor') : undefined}
+          onEdit={canManageContractors ? (c) => startEditContractor(c) : undefined}
         />
       ) : activeView === 'projects' ? (
         <ProjectDirectory
           projects={projects}
-          onAdd={() => setModal('project')}
-          onEdit={(p) => startEditProject(p)}
+          onAdd={canManageProjects ? () => setModal('project') : undefined}
+          onEdit={canManageProjects ? (p) => startEditProject(p) : undefined}
         />
       ) : <>
       <section className="summary-grid">
@@ -1091,12 +1152,17 @@ function App() {
             onChange={(e) => setProjectSearch(e.target.value)}
             aria-label="Search projects"
           />
-          <button type="button" className="primary-button" onClick={() => setModal('project')}>+ New project</button>
+          {canManageProjects && <button type="button" className="primary-button" onClick={() => setModal('project')}>+ New project</button>}
         </div>
       </div>
 
       <section className="project-layout">
-        <ProjectList projects={filteredProjects} selectedProjectId={selectedProject?.id} onSelect={setSelectedProjectId} onCreate={() => setModal('project')} />
+        <ProjectList
+          projects={filteredProjects}
+          selectedProjectId={selectedProject?.id}
+          onSelect={setSelectedProjectId}
+          onCreate={canManageProjects ? () => setModal('project') : undefined}
+        />
 
 
         {selectedProject && <div className="detail-panel">
@@ -1109,23 +1175,29 @@ function App() {
                 <p>{selectedProject.location}</p>
               </div>
             </div>
-            <button
-              type="button"
-              className="edit-project-badge-btn"
-              title="Edit project details"
-              onClick={() => startEditProject(selectedProject)}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-              </svg>
-              Edit project
-            </button>
+            {canManageProjects && (
+              <button
+                type="button"
+                className="edit-project-badge-btn"
+                title="Edit project details"
+                onClick={() => startEditProject(selectedProject)}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+                Edit project
+              </button>
+            )}
           </div>
 
           <div className="detail-stats">
             <div><span>Estimated cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not Estimated' : money(selectedProject.estimated_cost)}</strong></div>
             <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
-            <div><span>Balance due</span><strong>{selectedProject.estimated_cost > 0 ? money(selectedProject.estimated_cost - projectReceived) : 'N/A'}</strong></div>
+            {selectedProject.estimated_cost === '' ? (
+              <div><span>Balance due</span><strong>N/A</strong></div>
+            ) : selectedProject.estimated_cost > projectReceived ? (
+              <div><span>Balance due</span><strong>{money(selectedProject.estimated_cost - projectReceived)}</strong></div>
+            ) : null}
           </div>
 
           <div className="section-head">
@@ -1140,14 +1212,16 @@ function App() {
                 onChange={setSelectedContractor}
               />
               <button type="button" className="outline-button" onClick={exportContractorReport}>Export PDF</button>
-              <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Pay contractor</button>
+              {canManageContractorPayments && (
+                <button type="button" className="outline-button" onClick={() => setModal('contractor')}>+ Pay contractor</button>
+              )}
             </div>
           </div>
           <ContractorList
             contractors={filteredContractors}
             payments={contractorPayments}
-            onEditPayment={(payment) => startEditContractorPayment(payment)}
-            onDeletePayment={(payment) => setDeleteConfirm({ payment, type: 'contractor' })}
+            onEditPayment={canManageContractorPayments ? (payment) => startEditContractorPayment(payment) : undefined}
+            onDeletePayment={canManageContractorPayments ? (payment) => setDeleteConfirm({ payment, type: 'contractor' }) : undefined}
           />
 
           <div className="section-head expense-heading">
@@ -1157,13 +1231,15 @@ function App() {
             </div>
             <div className="section-actions">
               <button type="button" className="outline-button" onClick={exportOwnerReport}>Export PDF</button>
-              <button type="button" className="outline-button" onClick={() => setModal('payment')}>+ Add payment</button>
+              {canManageOwnerPayments && (
+                <button type="button" className="outline-button" onClick={() => setModal('payment')}>+ Add payment</button>
+              )}
             </div>
           </div>
           <PaymentList
             payments={projectPayments}
-            onEditPayment={(payment) => startEditPayment(payment)}
-            onDeletePayment={(payment) => setDeleteConfirm({ payment, type: 'project' })}
+            onEditPayment={canManageOwnerPayments ? (payment) => startEditPayment(payment) : undefined}
+            onDeletePayment={canManageOwnerPayments ? (payment) => setDeleteConfirm({ payment, type: 'project' }) : undefined}
           />
         </div>}
       </section>

@@ -8,7 +8,7 @@ export function ProjectList({ projects, selectedProjectId, onSelect, onCreate })
       <span className="project-info"><strong>{project.name}</strong><small>{project.address || 'Address not set'}{project.estimated_cost !== '' ? ` · ${money(project.estimated_cost)}` : ''}</small></span>
       <span className="arrow">›</span>
     </button>)}
-    <button type="button" className="add-project-row" onClick={onCreate}>+ Add another project</button>
+    {onCreate && <button type="button" className="add-project-row" onClick={onCreate}>+ Add another project</button>}
   </div>
 }
 
@@ -40,7 +40,7 @@ export function ProjectDirectory({ projects, onAdd, onEdit }) {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search projects"
           />
-          <button type="button" className="primary-button" onClick={onAdd}>+ Add project</button>
+          {onAdd && <button type="button" className="primary-button" onClick={onAdd}>+ Add project</button>}
         </div>
       </div>
       <div className="contractor-table-wrap">
