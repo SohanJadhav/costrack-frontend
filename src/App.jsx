@@ -1049,7 +1049,9 @@ function App() {
       setPaymentForm({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
       setError('')
-      if (selectedProjectId) await loadProjectDetails(selectedProjectId)
+      const currentProjectId = selectedProjectId || selectedProject?.id
+      if (currentProjectId) await loadProjectDetails(currentProjectId)
+      await loadTotalSpend()
     } catch (updateError) {
       setError(updateError.message)
     }
@@ -1095,7 +1097,8 @@ function App() {
       setContractorForm({ contractorId: '', firmAccountId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
       setModal(null)
       setError('')
-      if (selectedProjectId) await loadProjectDetails(selectedProjectId)
+      const currentProjectId = selectedProjectId || selectedProject?.id
+      if (currentProjectId) await loadProjectDetails(currentProjectId)
       await loadTotalSpend()
     } catch (updateError) {
       setError(updateError.message)
