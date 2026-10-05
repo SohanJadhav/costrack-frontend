@@ -4,6 +4,7 @@ import { ContractorDirectory, ContractorForm, ContractorList, NewContractorForm 
 import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
 import { ProjectDirectory, ProjectForm, ProjectList } from './components/ProjectComponents'
+import { FirmAccountDirectory, FirmAccountForm } from './components/FirmAccountComponents'
 import { ConfirmModal, BackupModal } from './components/Modal'
 import Login from './components/Login'
 
@@ -151,6 +152,7 @@ function App() {
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
   const [contractors, setContractors] = useState([])
+  const [firmAccounts, setFirmAccounts] = useState([])
   const [activeView, setActiveView] = useState('overview')
   const [projectPayments, setProjectPayments] = useState([])
   const [contractorPayments, setContractorPayments] = useState([])
@@ -164,6 +166,7 @@ function App() {
   const [projectForm, setProjectForm] = useState({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
   const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
+  const [firmAccountForm, setFirmAccountForm] = useState({ name: '', description: '', status: 'active' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
   const [deleteConfirm, setDeleteConfirm] = useState(null)
@@ -290,6 +293,17 @@ function App() {
     }
   }
 
+  async function loadFirmAccounts() {
+    try {
+      const response = await fetch(`${API_BASE}/firm-accounts`)
+      if (!response.ok) throw new Error('Firm accounts could not be loaded')
+      const data = await response.json()
+      setFirmAccounts(Array.isArray(data) ? data : [])
+    } catch (loadError) {
+      setError(loadError.message)
+    }
+  }
+
   async function loadProjectDetails(projectId) {
     if (!projectId) return
 
@@ -326,6 +340,7 @@ function App() {
     loadProjects()
     loadContractors()
     loadTotalSpend()
+    loadFirmAccounts()
   }, [user])
 
   useEffect(() => {
@@ -355,6 +370,7 @@ function App() {
   const canManageContractors = isAdmin || isContractorManager
   const canManageContractorPayments = isAdmin || isContractorManager
   const canManageBackups = isAdmin
+  const canManageFirmAccounts = isAdmin
 
   const contractorFilterOptions = useMemo(() => {
     const names = new Set()
@@ -902,6 +918,80 @@ function App() {
     }
   }
 
+  async function createFirmAccount(event) {
+    event.preventDefault()
+    if (!firmAccountForm.name.trim()) return
+
+    try {
+      const response = await fetch(`${API_BASE}/firm-accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: firmAccountForm.name.trim(),
+          description: firmAccountForm.description.trim(),
+          status: firmAccountForm.status || 'active',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || 'Unable to create firm account')
+      }
+
+      setFirmAccountForm({ name: '', description: '', status: 'active' })
+      await loadFirmAccounts()
+      setModal(null)
+      setError('')
+    } catch (createError) {
+      setError(createError.message)
+    }
+  }
+
+  function startEditFirmAccount(account) {
+    if (!account) return
+    setFirmAccountForm({
+      id: account.id,
+      name: account.name || '',
+      description: account.description || '',
+      status: account.status || 'active',
+    })
+    setModal('firm-account-edit')
+  }
+
+  async function updateFirmAccount(event) {
+    event.preventDefault()
+    if (!firmAccountForm.id || !firmAccountForm.name.trim()) return
+
+    try {
+      const response = await fetch(`${API_BASE}/firm-accounts/${firmAccountForm.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: firmAccountForm.name.trim(),
+          description: firmAccountForm.description.trim(),
+          status: firmAccountForm.status || 'active',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        throw new Error(errorBody.error?.message || 'Unable to update firm account')
+      }
+
+      setFirmAccountForm({ name: '', description: '', status: 'active' })
+      await loadFirmAccounts()
+      setModal(null)
+      setError('')
+    } catch (updateError) {
+      setError(updateError.message)
+    }
+  }
+
+  function startDeleteFirmAccount(account) {
+    if (!account) return
+    setDeleteConfirm({ account, type: 'firm-account' })
+  }
+
   function startEditPayment(payment) {
     if (!payment) return
     setPaymentForm({
@@ -994,7 +1084,42 @@ function App() {
   }
 
   async function handleConfirmDelete() {
-    if (!deleteConfirm || !deleteConfirm.payment) return
+    if (!deleteConfirm) return
+
+    if (deleteConfirm.type === 'firm-account') {
+      const accountId = deleteConfirm.account?.id
+      if (!accountId) {
+        setError('Cannot delete: firm account ID not found')
+        setDeleteConfirm(null)
+        return
+      }
+
+      setIsDeleting(true)
+      try {
+        const response = await fetch(`${API_BASE}/firm-accounts/${accountId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        })
+
+        if (!response.ok && response.status !== 204) {
+          const errorBody = await response.json().catch(() => ({}))
+          throw new Error(errorBody.error?.message || `Unable to delete firm account (status ${response.status})`)
+        }
+
+        setDeleteConfirm(null)
+        setError('')
+        await loadFirmAccounts()
+      } catch (delError) {
+        console.error('Delete firm account error:', delError)
+        setError(delError.message)
+        setDeleteConfirm(null)
+      } finally {
+        setIsDeleting(false)
+      }
+      return
+    }
+
+    if (!deleteConfirm.payment) return
     const { payment, type } = deleteConfirm
     const paymentId = payment.id ?? payment.ID
     if (!paymentId) {
@@ -1045,6 +1170,7 @@ function App() {
       <button type="button" className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} onClick={() => setActiveView('overview')}><span>◈</span>Overview</button>
       <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects {canManageProjects && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors</button>
+      <button type="button" className={`nav-item ${activeView === 'firm-accounts' ? 'active' : ''}`} onClick={() => { setActiveView('firm-accounts'); setModal(null) }}><span>🏛</span>Firm Accounts {canManageFirmAccounts && <b>+</b>}</button>
       <div className="sidebar-bottom">
         <div className="side-label">Your workspace</div>
         <div className="profile">
@@ -1119,6 +1245,13 @@ function App() {
           projects={projects}
           onAdd={canManageProjects ? () => setModal('project') : undefined}
           onEdit={canManageProjects ? (p) => startEditProject(p) : undefined}
+        />
+      ) : activeView === 'firm-accounts' ? (
+        <FirmAccountDirectory
+          firmAccounts={firmAccounts}
+          onAdd={canManageFirmAccounts ? () => { setFirmAccountForm({ name: '', description: '', status: 'active' }); setModal('firm-account') } : undefined}
+          onEdit={canManageFirmAccounts ? (fa) => startEditFirmAccount(fa) : undefined}
+          onDelete={canManageFirmAccounts ? (fa) => startDeleteFirmAccount(fa) : undefined}
         />
       ) : <>
       <section className="summary-grid">
@@ -1267,6 +1400,26 @@ function App() {
     }} close={() => setModal(null)} />}
     {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} isEdit={false} />}
     {modal === 'payment-edit' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={updatePayment} close={() => setModal(null)} isEdit={true} />}
+    {modal === 'firm-account' && (
+      <FirmAccountForm
+        form={firmAccountForm}
+        setForm={setFirmAccountForm}
+        onSubmit={createFirmAccount}
+        close={() => { setModal(null); setError('') }}
+        error={error}
+        isEdit={false}
+      />
+    )}
+    {modal === 'firm-account-edit' && (
+      <FirmAccountForm
+        form={firmAccountForm}
+        setForm={setFirmAccountForm}
+        onSubmit={updateFirmAccount}
+        close={() => { setModal(null); setError('') }}
+        error={error}
+        isEdit={true}
+      />
+    )}
     {modal === 'backup' && (
       <BackupModal
         result={backupResult}
@@ -1281,9 +1434,17 @@ function App() {
 
     {deleteConfirm && (
       <ConfirmModal
-        title={`Delete ${deleteConfirm.type === 'contractor' ? 'Contractor' : 'Received'} Payment`}
-        eyebrow={selectedProject?.name || 'Confirmation'}
-        message={`Are you sure you want to delete this payment of ${money(deleteConfirm.payment?.amount)} (${deleteConfirm.payment?.description || deleteConfirm.payment?.note || 'Payment'})? This will update the project balance and overall spend.`}
+        title={
+          deleteConfirm.type === 'firm-account'
+            ? 'Delete Firm Account'
+            : `Delete ${deleteConfirm.type === 'contractor' ? 'Contractor' : 'Received'} Payment`
+        }
+        eyebrow={deleteConfirm.type === 'firm-account' ? 'Firm Accounts' : selectedProject?.name || 'Confirmation'}
+        message={
+          deleteConfirm.type === 'firm-account'
+            ? `Are you sure you want to delete the firm account "${deleteConfirm.account?.name}"? This action cannot be undone.`
+            : `Are you sure you want to delete this payment of ${money(deleteConfirm.payment?.amount)} (${deleteConfirm.payment?.description || deleteConfirm.payment?.note || 'Payment'})? This will update the project balance and overall spend.`
+        }
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteConfirm(null)}
         isSubmitting={isDeleting}
