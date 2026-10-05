@@ -10,7 +10,12 @@ export function ExpenseList({ expenses, contractors, onDeletePayment }) {
       return <div className="expense-row" key={expense.id}>
         <span className="expense-dot" />
         <span className="expense-copy">
-          <strong>{expense.description || 'Contract payment'}</strong>
+          <strong
+            className="truncate-description"
+            title={expense.description || 'Contract payment'}
+          >
+            {expense.description || 'Contract payment'}
+          </strong>
           <small>{contractor?.contractor_name || 'Unknown contractor'} · {formattedDate} · {formatModeName(mode)}</small>
         </span>
         <strong className="expense-amount">{money(expense.amount)}</strong>

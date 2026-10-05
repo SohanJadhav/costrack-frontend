@@ -78,6 +78,8 @@ function normalizePayment(item, contractorId) {
     firmAccountName: item.firm_account_name ?? item.firmAccountName ?? item.firm_account?.name ?? '',
     firm_account_name: item.firm_account_name ?? item.firmAccountName ?? item.firm_account?.name ?? '',
     firmAccount: item.firm_account || item.firmAccount || null,
+    created_at: item.created_at || item.createdAt || null,
+    updated_at: item.updated_at || item.updatedAt || null,
   }
 }
 

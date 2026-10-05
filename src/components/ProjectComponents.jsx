@@ -54,7 +54,7 @@ export function ProjectDirectory({ projects, onAdd, onEdit }) {
                 <th>Address</th>
                 <th>Estimated cost</th>
                 <th>Start date</th>
-                <th>Description</th>
+                <th className="col-description">Description</th>
                 {onEdit && <th style={{ width: '60px', textAlign: 'center' }}>Actions</th>}
               </tr>
             </thead>
@@ -67,7 +67,9 @@ export function ProjectDirectory({ projects, onAdd, onEdit }) {
                   <td>{project.address || '—'}</td>
                   <td>{project.estimated_cost === '' ? '—' : money(project.estimated_cost)}</td>
                   <td>{project.start_date ? new Date(project.start_date).toLocaleDateString('en-IN') : '—'}</td>
-                  <td>{project.description || '—'}</td>
+                  <td className="cell-description" title={project.description || ''}>
+                    <span className="truncate-text">{project.description || '—'}</span>
+                  </td>
                   {onEdit && (
                     <td style={{ textAlign: 'center' }}>
                       <button

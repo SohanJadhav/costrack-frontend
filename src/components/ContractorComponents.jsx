@@ -7,7 +7,7 @@ export function ContractorList({ contractors, payments = [], onEditPayment, onDe
   const toggleExpand = (contractorId) => {
     setExpandedContractors((prev) => ({
       ...prev,
-      [contractorId]: prev[contractorId] === false ? true : false,
+      [contractorId]: !prev[contractorId],
     }))
   }
 
@@ -18,7 +18,7 @@ export function ContractorList({ contractors, payments = [], onEditPayment, onDe
           const contractorPaymentsList = payments.filter(
             (p) => String(p.contractorId) === String(contractor.contractor_id)
           )
-          const isExpanded = expandedContractors[contractor.contractor_id] !== false
+          const isExpanded = Boolean(expandedContractors[contractor.contractor_id])
 
           return (
             <div className="contractor-card-wrap" key={contractor.contractor_id}>
@@ -45,8 +45,8 @@ export function ContractorList({ contractors, payments = [], onEditPayment, onDe
                     .toUpperCase()}
                 </span>
 
-                <span>
-                  <strong>{contractor.contractor_name}</strong>
+                <span className="contractor-row-info">
+                  <strong className="truncate-description" title={contractor.contractor_name}>{contractor.contractor_name}</strong>
                   <small>
                     {money(contractor.total_paid || 0)} paid · {contractorPaymentsList.length} payment{contractorPaymentsList.length === 1 ? '' : 's'}
                   </small>
@@ -76,7 +76,12 @@ export function ContractorList({ contractors, payments = [], onEditPayment, onDe
                       <div className="contractor-sub-payment-row" key={payment.id}>
                         <span className="sub-payment-dot" />
                         <span className="sub-payment-info">
-                          <strong>{payment.description || payment.note || 'Contractor payment'}</strong>
+                          <strong
+                            className="truncate-description"
+                            title={payment.description || payment.note || 'Contractor payment'}
+                          >
+                            {payment.description || payment.note || 'Contractor payment'}
+                          </strong>
                           <small>{formattedDate} · {formatModeName(mode)}{firmName ? ` · ${firmName}` : ''}</small>
                         </span>
                         <strong className="sub-payment-amount">{money(payment.amount)}</strong>
@@ -318,7 +323,7 @@ export function ContractorDirectory({ contractors, onAdd, onEdit }) {
                 <th>Firm name</th>
                 <th>Phone number</th>
                 <th>Firm address</th>
-                <th>Description</th>
+                <th className="col-description">Description</th>
                 {onEdit && <th style={{ width: '60px', textAlign: 'center' }}>Actions</th>}
               </tr>
             </thead>
@@ -329,7 +334,9 @@ export function ContractorDirectory({ contractors, onAdd, onEdit }) {
                   <td>{contractor.firm_name || '—'}</td>
                   <td>{contractor.phone_number || '—'}</td>
                   <td>{contractor.firm_address || '—'}</td>
-                  <td>{contractor.description || '—'}</td>
+                  <td className="cell-description" title={contractor.description || ''}>
+                    <span className="truncate-text">{contractor.description || '—'}</span>
+                  </td>
                   {onEdit && (
                     <td style={{ textAlign: 'center' }}>
                       <button

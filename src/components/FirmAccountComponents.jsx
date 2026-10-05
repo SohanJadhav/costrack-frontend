@@ -59,7 +59,7 @@ export function FirmAccountDirectory({ firmAccounts = [], onAdd, onEdit, onDelet
             <thead>
               <tr>
                 <th>Firm Name</th>
-                <th>Description</th>
+                <th className="col-description">Description</th>
                 <th>Status</th>
                 <th>Created At</th>
                 <th>Updated At</th>
@@ -76,7 +76,9 @@ export function FirmAccountDirectory({ firmAccounts = [], onAdd, onEdit, onDelet
                     <td>
                       <strong>{account.name}</strong>
                     </td>
-                    <td>{account.description || '—'}</td>
+                    <td className="cell-description" title={account.description || ''}>
+                      <span className="truncate-text">{account.description || '—'}</span>
+                    </td>
                     <td>
                       <span
                         className={`status-pill ${isActive ? 'status-active' : 'status-inactive'}`}

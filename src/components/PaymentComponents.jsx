@@ -16,7 +16,9 @@ export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
       return <div className="payment-row" key={payment.id}>
         <span className="payment-date-badge" aria-hidden="true">₹</span>
         <span className="payment-copy">
-          <strong>{payment.note || payment.description || 'Payment received'}</strong>
+          <strong className="truncate-description" title={payment.note || payment.description || 'Payment received'}>
+            {payment.note || payment.description || 'Payment received'}
+          </strong>
           <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}{firmName ? <><span className="payment-meta-separator">·</span>{firmName}</> : null}</small>
         </span>
         <strong className="payment-amount">{money(payment.amount)}</strong>
