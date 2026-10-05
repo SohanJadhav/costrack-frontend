@@ -1193,7 +1193,7 @@ function App() {
       <div className="side-label">Workspace</div>
       <button type="button" className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} onClick={() => setActiveView('overview')}><span>◈</span>Overview</button>
       <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects {canManageProjects && <b>+</b>}</button>
-      <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors</button>
+      <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors  {canManageContractors && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'firm-accounts' ? 'active' : ''}`} onClick={() => { setActiveView('firm-accounts'); setModal(null) }}><span>🏛</span>Firm Accounts {canManageFirmAccounts && <b>+</b>}</button>
       <div className="sidebar-bottom">
         <div className="side-label">Your workspace</div>
