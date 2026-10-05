@@ -73,6 +73,11 @@ function normalizePayment(item, contractorId) {
     payment_date: String(dateValue).slice(0, 10),
     paymentMode: mode,
     payment_mode: mode,
+    firmAccountId: item.firm_account_id ?? item.firmAccountId ?? item.FirmAccountID ?? null,
+    firm_account_id: item.firm_account_id ?? item.firmAccountId ?? item.FirmAccountID ?? null,
+    firmAccountName: item.firm_account_name ?? item.firmAccountName ?? item.firm_account?.name ?? '',
+    firm_account_name: item.firm_account_name ?? item.firmAccountName ?? item.firm_account?.name ?? '',
+    firmAccount: item.firm_account || item.firmAccount || null,
   }
 }
 
@@ -164,11 +169,11 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [projectForm, setProjectForm] = useState({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
-  const [contractorForm, setContractorForm] = useState({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
+  const [contractorForm, setContractorForm] = useState({ contractorId: '', firmAccountId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [firmAccountForm, setFirmAccountForm] = useState({ name: '', description: '', status: 'active' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
-  const [paymentForm, setPaymentForm] = useState({ amount: '', date: today, paymentMode: 'cash', note: '' })
+  const [paymentForm, setPaymentForm] = useState({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isBackingUp, setIsBackingUp] = useState(false)
@@ -494,6 +499,7 @@ function App() {
         .map((payment) => ({
           date: payment.date || payment.payment_date || today,
           description: payment.description || payment.note || 'Payment received',
+          account: payment.firmAccountName || payment.firm_account_name || payment.firmAccount?.name || '—',
           mode: payment.paymentMode || payment.payment_mode || 'cash',
           amount: Number(payment.amount || 0),
         }))
@@ -507,14 +513,15 @@ function App() {
             <tr>
               <td>${formatDate(entry.date)}</td>
               <td>${entry.description}</td>
+              <td>${entry.account}</td>
               <td>${formatPaymentMode(entry.mode)}</td>
               <td class="amount">${formatCurrency(entry.amount)}</td>
             </tr>`).join('') + `
             <tr class="total-row">
-              <td colspan="3">Total received</td>
+              <td colspan="4">Total received</td>
               <td class="amount">${formatCurrency(incomingTotal)}</td>
             </tr>`
-        : `<tr><td colspan="4" class="empty">No incoming payments recorded yet</td></tr>`
+        : `<tr><td colspan="5" class="empty">No incoming payments recorded yet</td></tr>`
 
       const reportHtml = `
         <!DOCTYPE html>
@@ -548,6 +555,7 @@ function App() {
                     <tr>
                       <th>Date</th>
                       <th>Description</th>
+                      <th>Transaction Account</th>
                       <th>Mode</th>
                       <th class="amount">Amount</th>
                     </tr>
@@ -601,6 +609,7 @@ function App() {
             date: payment.date || payment.payment_date || today,
             contractorName: contractor?.contractor_name || 'Unknown contractor',
             description: payment.description || payment.note || 'Contractor payment',
+            account: payment.firmAccountName || payment.firm_account_name || payment.firmAccount?.name || '—',
             mode: payment.paymentMode || payment.payment_mode || 'cash',
             amount: Number(payment.amount || 0),
           }
@@ -622,14 +631,15 @@ function App() {
 
       // When a single contractor is selected, hide the Contractor column (it's redundant)
       const tableHead = isFiltered
-        ? `<tr><th>Date</th><th>Description</th><th>Mode</th><th class="amount">Amount</th></tr>`
-        : `<tr><th>Date</th><th>Contractor</th><th>Description</th><th>Mode</th><th class="amount">Amount</th></tr>`
+        ? `<tr><th>Date</th><th>Description</th><th>Transaction Account</th><th>Mode</th><th class="amount">Amount</th></tr>`
+        : `<tr><th>Date</th><th>Contractor</th><th>Description</th><th>Transaction Account</th><th>Mode</th><th class="amount">Amount</th></tr>`
 
       const contractorRows = contractorEntries.length
         ? contractorEntries.map((entry) => isFiltered ? `
             <tr>
               <td>${formatDate(entry.date)}</td>
               <td>${entry.description}</td>
+              <td>${entry.account}</td>
               <td>${formatPaymentMode(entry.mode)}</td>
               <td class="amount">${formatCurrency(entry.amount)}</td>
             </tr>` : `
@@ -637,14 +647,15 @@ function App() {
               <td>${formatDate(entry.date)}</td>
               <td>${entry.contractorName}</td>
               <td>${entry.description}</td>
+              <td>${entry.account}</td>
               <td>${formatPaymentMode(entry.mode)}</td>
               <td class="amount">${formatCurrency(entry.amount)}</td>
             </tr>`).join('') + `
             <tr class="total-row">
-              <td colspan="${isFiltered ? 3 : 4}">Total paid${isFiltered ? ` to ${selectedContractor}` : ' to contractors'}</td>
+              <td colspan="${isFiltered ? 4 : 5}">Total paid${isFiltered ? ` to ${selectedContractor}` : ' to contractors'}</td>
               <td class="amount">${formatCurrency(outgoingTotal)}</td>
             </tr>`
-        : `<tr><td colspan="${isFiltered ? 4 : 5}" class="empty">No contractor payments recorded yet</td></tr>`
+        : `<tr><td colspan="${isFiltered ? 5 : 6}" class="empty">No contractor payments recorded yet</td></tr>`
 
       const reportHtml = `
         <!DOCTYPE html>
@@ -731,6 +742,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: Number(contractorForm.amount || 0),
+          firm_account_id: contractorForm.firmAccountId ? Number(contractorForm.firmAccountId) : null,
           payment_date: new Date(contractorForm.date).toISOString(),
           description: contractorForm.description.trim() || 'Contractor payment',
           payment_mode: contractorForm.paymentMode || 'cash',
@@ -742,7 +754,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to save contractor payment')
       }
 
-      setContractorForm({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
+      setContractorForm({ contractorId: '', firmAccountId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
@@ -793,6 +805,7 @@ function App() {
     try {
       const payload = {
         amount: Number(paymentForm.amount || 0),
+        firm_account_id: paymentForm.firmAccountId ? Number(paymentForm.firmAccountId) : null,
         payment_date: new Date(paymentForm.date).toISOString(),
         description: paymentForm.note.trim() || 'Payment received',
         payment_mode: paymentForm.paymentMode || 'cash',
@@ -811,7 +824,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to save payment')
       }
 
-      setPaymentForm({ amount: '', date: today, paymentMode: 'cash', note: '' })
+      setPaymentForm({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
@@ -997,6 +1010,7 @@ function App() {
     setPaymentForm({
       id: payment.id,
       amount: String(payment.amount || ''),
+      firmAccountId: payment.firmAccountId ?? payment.firm_account_id ?? '',
       date: payment.date || payment.payment_date || today,
       paymentMode: payment.paymentMode || payment.payment_mode || 'cash',
       note: payment.note || payment.description || '',
@@ -1011,6 +1025,7 @@ function App() {
     try {
       const payload = {
         amount: Number(paymentForm.amount || 0),
+        firm_account_id: paymentForm.firmAccountId ? Number(paymentForm.firmAccountId) : null,
         payment_date: new Date(paymentForm.date).toISOString(),
         description: paymentForm.note.trim() || 'Payment received',
         payment_mode: paymentForm.paymentMode || 'cash',
@@ -1029,7 +1044,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to update payment')
       }
 
-      setPaymentForm({ amount: '', date: today, paymentMode: 'cash', note: '' })
+      setPaymentForm({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
       setError('')
       if (selectedProjectId) await loadProjectDetails(selectedProjectId)
@@ -1043,6 +1058,7 @@ function App() {
     setContractorForm({
       id: payment.id,
       contractorId: payment.contractorId ?? payment.contractor_id ?? '',
+      firmAccountId: payment.firmAccountId ?? payment.firm_account_id ?? '',
       amount: String(payment.amount || ''),
       date: payment.date || payment.payment_date || today,
       paymentMode: payment.paymentMode || payment.payment_mode || 'cash',
@@ -1061,6 +1077,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contractor_id: Number(contractorForm.contractorId),
+          firm_account_id: contractorForm.firmAccountId ? Number(contractorForm.firmAccountId) : null,
           amount: Number(contractorForm.amount || 0),
           payment_date: new Date(contractorForm.date).toISOString(),
           description: contractorForm.description.trim() || 'Contractor payment',
@@ -1073,7 +1090,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to update contractor payment')
       }
 
-      setContractorForm({ contractorId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
+      setContractorForm({ contractorId: '', firmAccountId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
       setModal(null)
       setError('')
       if (selectedProjectId) await loadProjectDetails(selectedProjectId)
@@ -1383,8 +1400,8 @@ function App() {
     {modal === 'project-edit' && <ProjectForm form={projectForm} setForm={setProjectForm} onSubmit={updateProject} close={() => setModal(null)} isEdit={true} />}
     {modal === 'new-contractor' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={createContractor} close={() => setModal(null)} isEdit={false} />}
     {modal === 'contractor-edit' && <NewContractorForm form={newContractorForm} setForm={setNewContractorForm} onSubmit={updateContractor} close={() => setModal(null)} isEdit={true} />}
-    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} isEdit={false} />}
-    {modal === 'contractor-payment-edit' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} form={contractorForm} setForm={setContractorForm} onSubmit={updateContractorPayment} close={() => setModal(null)} isEdit={true} />}
+    {modal === 'contractor' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} firmAccounts={firmAccounts} form={contractorForm} setForm={setContractorForm} onSubmit={addContractor} close={() => setModal(null)} isEdit={false} />}
+    {modal === 'contractor-payment-edit' && <ContractorForm projectName={selectedProject?.name} contractors={contractors} firmAccounts={firmAccounts} form={contractorForm} setForm={setContractorForm} onSubmit={updateContractorPayment} close={() => setModal(null)} isEdit={true} />}
     {modal === 'expense' && <ExpenseForm projectName={selectedProject?.name} contractors={projectContractors} form={expenseForm} setForm={setExpenseForm} onSubmit={(event) => {
       event.preventDefault()
       if (!selectedProject || !expenseForm.contractorId || !expenseForm.amount) return
@@ -1398,8 +1415,8 @@ function App() {
       setModal('payment')
       setExpenseForm({ contractorId: '', amount: '', description: '' })
     }} close={() => setModal(null)} />}
-    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} isEdit={false} />}
-    {modal === 'payment-edit' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={updatePayment} close={() => setModal(null)} isEdit={true} />}
+    {modal === 'payment' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={addPayment} close={() => setModal(null)} isEdit={false} firmAccounts={firmAccounts} />}
+    {modal === 'payment-edit' && <PaymentForm projectName={selectedProject?.name} form={paymentForm} setForm={setPaymentForm} onSubmit={updatePayment} close={() => setModal(null)} isEdit={true} firmAccounts={firmAccounts} />}
     {modal === 'firm-account' && (
       <FirmAccountForm
         form={firmAccountForm}

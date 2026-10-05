@@ -11,12 +11,13 @@ export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
         : 'Date not set'
       const mode = payment.paymentMode || payment.payment_mode || 'cash'
       const modeLabel = formatModeName(mode)
+      const firmName = payment.firmAccountName || payment.firm_account_name || payment.firmAccount?.name || payment.firm_account?.name || ''
 
       return <div className="payment-row" key={payment.id}>
         <span className="payment-date-badge" aria-hidden="true">₹</span>
         <span className="payment-copy">
           <strong>{payment.note || payment.description || 'Payment received'}</strong>
-          <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}</small>
+          <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}{firmName ? <><span className="payment-meta-separator">·</span>{firmName}</> : null}</small>
         </span>
         <strong className="payment-amount">{money(payment.amount)}</strong>
         <div className="row-action-btns">
@@ -62,7 +63,7 @@ export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
 }
 
 
-export function PaymentForm({ projectName, form, setForm, onSubmit, close, isEdit = false }) {
+export function PaymentForm({ projectName, form, setForm, onSubmit, close, isEdit = false, firmAccounts = [] }) {
   const today = new Date().toLocaleDateString('en-CA')
 
   return (
@@ -100,6 +101,23 @@ export function PaymentForm({ projectName, form, setForm, onSubmit, close, isEdi
             setForm({ ...form, date: event.target.value })
           }
         />
+      </label>
+
+      <label>
+        Transaction account
+        <select
+          value={form.firmAccountId || ''}
+          onChange={(event) =>
+            setForm({ ...form, firmAccountId: event.target.value })
+          }
+        >
+          <option value="">Select transaction account</option>
+          {(firmAccounts || []).filter(acc => acc.status !== 'inactive' || String(acc.id) === String(form.firmAccountId)).map(account => (
+            <option key={account.id} value={account.id}>
+              {account.name}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label>

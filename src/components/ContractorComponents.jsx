@@ -70,13 +70,14 @@ export function ContractorList({ contractors, payments = [], onEditPayment, onDe
                       ? new Date(`${String(dateValue).slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
                       : 'Date not set'
                     const mode = payment.paymentMode || payment.payment_mode || 'cash'
+                    const firmName = payment.firmAccountName || payment.firm_account_name || payment.firmAccount?.name || payment.firm_account?.name || ''
 
                     return (
                       <div className="contractor-sub-payment-row" key={payment.id}>
                         <span className="sub-payment-dot" />
                         <span className="sub-payment-info">
                           <strong>{payment.description || payment.note || 'Contractor payment'}</strong>
-                          <small>{formattedDate} · {formatModeName(mode)}</small>
+                          <small>{formattedDate} · {formatModeName(mode)}{firmName ? ` · ${firmName}` : ''}</small>
                         </span>
                         <strong className="sub-payment-amount">{money(payment.amount)}</strong>
                         <div className="row-action-btns">
@@ -135,6 +136,7 @@ export function ContractorList({ contractors, payments = [], onEditPayment, onDe
 export function ContractorForm({
   projectName,
   contractors = [],
+  firmAccounts = [],
   form,
   setForm,
   onSubmit,
@@ -220,6 +222,23 @@ export function ContractorForm({
           value={form.date}
           onChange={(event) => setForm({ ...form, date: event.target.value })}
         />
+      </label>
+
+      <label>
+        Transaction account
+        <select
+          value={form.firmAccountId || ''}
+          onChange={(event) =>
+            setForm({ ...form, firmAccountId: event.target.value })
+          }
+        >
+          <option value="">Select transaction account</option>
+          {(firmAccounts || []).filter(acc => acc.status !== 'inactive' || String(acc.id) === String(form.firmAccountId)).map(account => (
+            <option key={account.id} value={account.id}>
+              {account.name}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label>
