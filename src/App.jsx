@@ -23,6 +23,7 @@ function normalizeProject(project) {
     description: project.description || '',
     start_date: project.start_date || today,
     color: ['#e77b54', '#4ca68c', '#d2915d', '#5d9cc7'][project.id % 4] || '#e77b54',
+    is_deleted: Boolean(project.is_deleted),
   }
 }
 
@@ -80,6 +81,7 @@ function normalizePayment(item, contractorId) {
     firmAccount: item.firm_account || item.firmAccount || null,
     created_at: item.created_at || item.createdAt || null,
     updated_at: item.updated_at || item.updatedAt || null,
+    is_deleted: Boolean(item.is_deleted),
   }
 }
 
