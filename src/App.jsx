@@ -5,10 +5,13 @@ import { ExpenseList } from './components/ExpenseComponents'
 import { PaymentForm, PaymentList } from './components/PaymentComponents'
 import { ProjectDirectory, ProjectForm, ProjectList } from './components/ProjectComponents'
 import { FirmAccountDirectory, FirmAccountForm } from './components/FirmAccountComponents'
+import { TransactionSheet } from './components/TransactionSheet'
 import { ConfirmModal, BackupModal } from './components/Modal'
 import Login from './components/Login'
 
-const API_BASE = 'http://localhost:8080/api/v1'
+const API_BASE = (typeof window !== 'undefined' && window.location.port === '5173')
+  ? 'http://localhost:8080/api/v1'
+  : '/api/v1'
 const today = new Date().toISOString().slice(0, 10)
 
 function normalizeProject(project) {
@@ -1195,6 +1198,7 @@ function App() {
       <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects {canManageProjects && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors  {canManageContractors && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'firm-accounts' ? 'active' : ''}`} onClick={() => { setActiveView('firm-accounts'); setModal(null) }}><span>🏛</span>Firm Accounts {canManageFirmAccounts && <b>+</b>}</button>
+      <button type="button" className={`nav-item ${activeView === 'sheet' ? 'active' : ''}`} onClick={() => { setActiveView('sheet'); setModal(null) }}><span>▤</span>Complete Sheet</button>
       <div className="sidebar-bottom">
         <div className="side-label">Your workspace</div>
         <div className="profile">
@@ -1276,6 +1280,12 @@ function App() {
           onAdd={canManageFirmAccounts ? () => { setFirmAccountForm({ name: '', description: '', status: 'active' }); setModal('firm-account') } : undefined}
           onEdit={canManageFirmAccounts ? (fa) => startEditFirmAccount(fa) : undefined}
           onDelete={canManageFirmAccounts ? (fa) => startDeleteFirmAccount(fa) : undefined}
+        />
+      ) : activeView === 'sheet' ? (
+        <TransactionSheet
+          apiBase={API_BASE}
+          projects={projects}
+          contractors={contractors}
         />
       ) : <>
       <section className="summary-grid">

@@ -1,0 +1,167 @@
+/* Styles for TransactionSheet to match ContractorDirectory / ProjectDirectory exactly */
+
+.sheet-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line, #e7e1d9);
+}
+
+.sheet-filters-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.sheet-filters-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet-date-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted, #817d75);
+}
+
+.sheet-date-filter-group span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted, #817d75);
+}
+
+.sheet-date-input {
+  border: 1px solid #ddd6ce;
+  border-radius: 5px;
+  padding: 6px 10px;
+  background: white;
+  color: var(--ink, #272724);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+}
+
+.sheet-date-input:focus {
+  border-color: var(--coral, #e77b54);
+  box-shadow: 0 0 0 2px #f9e5d9;
+}
+
+.sheet-preset-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-preset-btn {
+  border: 1px solid #ddd6ce;
+  background: white;
+  color: var(--muted, #817d75);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sheet-preset-btn:hover {
+  background: #fbf7f2;
+  color: var(--ink, #272724);
+  border-color: #cbbfb0;
+}
+
+.sheet-preset-btn.active {
+  background: #f9e5d9;
+  border-color: #f3d4c4;
+  color: #c96849;
+}
+
+.sheet-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.sheet-type-badge.debit {
+  background: #fee8df;
+  color: #c0532e;
+  border: 1px solid #f9c7b4;
+}
+
+.sheet-type-badge.credit {
+  background: #e6f4f1;
+  color: #2b826b;
+  border: 1px solid #bce1d8;
+}
+
+.sheet-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sheet-amount.debit {
+  color: #c0532e;
+}
+
+.sheet-amount.credit {
+  color: #2b826b;
+}
+
+.sheet-dash {
+  color: #bbb4ab;
+}
+
+.sheet-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 37px;
+  margin-bottom: -10px;
+}
+
+.contractor-table tfoot td {
+  padding: 14px 12px;
+  border-top: 2px solid var(--line, #e7e1d9);
+  border-bottom: none;
+  font-weight: 700;
+  background: #faf7f2;
+}
+
+.contractor-table tfoot td.total-title {
+  color: var(--ink, #272724);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+@media (max-width: 800px) {
+  .sheet-summary-grid {
+    grid-template-columns: 1fr;
+    margin-top: 25px;
+  }
+  .sheet-filters-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sheet-filters-left,
+  .sheet-filters-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
