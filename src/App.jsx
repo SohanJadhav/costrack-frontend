@@ -408,6 +408,23 @@ function App() {
     )
   }, [projectContractors, selectedContractor])
 
+  const filteredContractorSpend = useMemo(() => {
+    if (selectedContractor === 'all') {
+      const fromPayments = contractorPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+      if (fromPayments > 0 || !projectContractors.length) return fromPayments
+      return projectContractors.reduce((total, c) => total + Number(c.total_paid || 0), 0)
+    }
+    const matchingContractor = projectContractors.find((c) => c.contractor_name === selectedContractor)
+    if (!matchingContractor) return 0
+    const matchedPayments = contractorPayments.filter(
+      (p) => String(p.contractorId) === String(matchingContractor.contractor_id)
+    )
+    if (matchedPayments.length > 0) {
+      return matchedPayments.reduce((total, p) => total + Number(p.amount || 0), 0)
+    }
+    return Number(matchingContractor.total_paid || 0)
+  }, [contractorPayments, selectedContractor, projectContractors])
+
   const filteredProjects = useMemo(() => {
     const q = projectSearch.trim().toLowerCase()
     if (!q) return projects
@@ -1288,23 +1305,6 @@ function App() {
           contractors={contractors}
         />
       ) : <>
-      <section className="summary-grid">
-        <div className="summary-card warm">
-          <span>Total spend in projects</span>
-          <strong>{money(totalSpend)}</strong>
-        </div>
-        <div className="summary-card">
-          <span>Total active projects</span>
-          <strong>{projects.length}</strong>
-          <small><em className="green">●</em> All projects on track</small>
-        </div>
-        <div className="summary-card">
-          <span>Total projects revenue</span>
-          <strong>{money(totalProjectsRevenue)}</strong>
-          <small><em className="blue">●</em> Estimated project value</small>
-        </div>
-      </section>
-
       <div className="workspace-heading">
         <div>
           <span className="eyebrow">Project workspace</span>
@@ -1362,15 +1362,19 @@ function App() {
             <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
             {selectedProject.estimated_cost === '' ? (
               <div><span>Balance due</span><strong>N/A</strong></div>
-            ) : selectedProject.estimated_cost > projectReceived ? (
-              <div><span>Balance due</span><strong>{money(selectedProject.estimated_cost - projectReceived)}</strong></div>
-            ) : null}
+            ) : (
+              <div><span>Balance due</span><strong>{money(Math.max(0, Number(selectedProject.estimated_cost) - projectReceived))}</strong></div>
+            )}
+            <div>
+              <span>{selectedContractor === 'all' ? 'Total contractor spend' : `Spend (${selectedContractor})`}</span>
+              <strong>{money(filteredContractorSpend)}</strong>
+            </div>
           </div>
 
           <div className="section-head">
             <div>
               <h3>Contractors &amp; Expenses <span className="count">{filteredContractors.length}</span></h3>
-              <p>People assigned to this project</p>
+              <p>People assigned to this project &bull; Total spend: <strong>{money(filteredContractorSpend)}</strong></p>
             </div>
             <div className="section-actions">
               <ContractorFilterCombo
