@@ -92,6 +92,47 @@ function money(amount) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0)
 }
 
+function getIndianGreeting(date = new Date()) {
+  const hourStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    hour12: false,
+  }).format(date)
+  const hour = parseInt(hourStr, 10)
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function LiveIndianTime() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const datePart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(now)
+
+  const timePart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(now)
+
+  return <>{`${datePart} • ${timePart} IST`}</>
+}
+
 function ContractorFilterCombo({ options, value, onChange }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
@@ -1233,8 +1274,8 @@ function App() {
     <main className="main-content">
       <header className="topbar">
         <div>
-          <span className="eyebrow">Tuesday, September 1, 2026</span>
-          <h1>Good morning, {user.name} <span>✦</span></h1>
+          <span className="eyebrow"><LiveIndianTime /></span>
+          <h1>{getIndianGreeting()}, {user.name} <span>✦</span></h1>
         </div>
         <div className="top-actions">
           {canManageBackups && (
@@ -1358,15 +1399,15 @@ function App() {
           </div>
 
           <div className="detail-stats">
-            <div><span>Estimated cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not Estimated' : money(selectedProject.estimated_cost)}</strong></div>
-            <div><span>Received</span><strong>{money(projectReceived)}</strong></div>
+            <div><span>Estimated Cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not Estimated' : money(selectedProject.estimated_cost)}</strong></div>
+            <div><span>Amount Received</span><strong>{money(projectReceived)}</strong></div>
             {selectedProject.estimated_cost === '' ? (
-              <div><span>Balance due</span><strong>N/A</strong></div>
+              <div><span>Balance Due</span><strong>N/A</strong></div>
             ) : (
-              <div><span>Balance due</span><strong>{money(Math.max(0, Number(selectedProject.estimated_cost) - projectReceived))}</strong></div>
+              <div><span>Balance Due</span><strong>{money(Math.max(0, Number(selectedProject.estimated_cost) - projectReceived))}</strong></div>
             )}
             <div>
-              <span>{selectedContractor === 'all' ? 'Total contractor spend' : `Spend (${selectedContractor})`}</span>
+              <span>{selectedContractor === 'all' ? 'Contractor Payments' : `Contractor Payment (${selectedContractor})`}</span>
               <strong>{money(filteredContractorSpend)}</strong>
             </div>
           </div>

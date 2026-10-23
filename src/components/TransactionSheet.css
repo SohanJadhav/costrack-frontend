@@ -165,3 +165,108 @@
     justify-content: flex-start;
   }
 }
+
+/* Pagination Bar Styles */
+.sheet-pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #e7e1d9);
+  font-size: 12px;
+  color: var(--muted, #817d75);
+}
+
+.sheet-pagination-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sheet-pagination-info strong {
+  color: var(--ink, #272724);
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+}
+
+.sheet-page-size-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.sheet-page-size-select {
+  padding: 4px 8px;
+  font-size: 11px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.sheet-pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #ddd6ce;
+  border-radius: 4px;
+  background: white;
+  color: var(--ink, #272724);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #fbf0e9;
+  border-color: var(--coral, #e77b54);
+  color: var(--coral, #e77b54);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f7f4f0;
+  border-color: #e5ded7;
+  color: #a29d95;
+}
+
+.pagination-btn.active {
+  background: var(--coral, #e77b54);
+  border-color: var(--coral, #e77b54);
+  color: white;
+  font-weight: 700;
+}
+
+.pagination-ellipsis {
+  padding: 0 4px;
+  color: #a29d95;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 650px) {
+  .sheet-pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sheet-pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}

@@ -46,6 +46,19 @@ function formatPaymentMode(mode) {
   }
 }
 
+function getPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  }
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, '...', totalPages]
+  }
+  if (currentPage >= totalPages - 3) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+  }
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages]
+}
+
 export function TransactionSheet({ apiBase = '/api/v1', projects = [], contractors = [] }) {
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const firstOfMonthStr = useMemo(() => {
@@ -60,6 +73,8 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
   const [selectedProject, setSelectedProject] = useState('all')
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState('desc') // 'desc' | 'asc'
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25) // 10 | 25 | 50 | 100 | 'all'
   const [transactions, setTransactions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -131,6 +146,7 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
     setSelectedProject('all')
     setSearch('')
     setSortOrder('desc')
+    setCurrentPage(1)
   }
 
   // Filtered transactions for display
@@ -165,6 +181,34 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
       return true
     })
   }, [transactions, selectedType, selectedProject, search])
+
+  // Reset page to 1 whenever any filter or page size changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, selectedType, selectedProject, startDate, endDate, sortOrder, pageSize])
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all' || !filteredTransactions.length) return 1
+    return Math.ceil(filteredTransactions.length / Number(pageSize))
+  }, [filteredTransactions.length, pageSize])
+
+  // Keep current page within valid bounds
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const paginatedTransactions = useMemo(() => {
+    if (pageSize === 'all') return filteredTransactions
+    const size = Number(pageSize)
+    const start = (currentPage - 1) * size
+    return filteredTransactions.slice(start, start + size)
+  }, [filteredTransactions, currentPage, pageSize])
+
+  const startItem = filteredTransactions.length === 0 ? 0 : pageSize === 'all' ? 1 : (currentPage - 1) * Number(pageSize) + 1
+  const endItem = pageSize === 'all' ? filteredTransactions.length : Math.min(currentPage * Number(pageSize), filteredTransactions.length)
+  const pageNumbers = useMemo(() => getPageNumbers(currentPage, totalPages), [currentPage, totalPages])
 
   // Aggregate totals
   const { totalDebit, totalCredit, netBalance, debitCount, creditCount } = useMemo(() => {
@@ -576,7 +620,7 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
                 </tr>
               </thead>
               <tbody>
-                {filteredTransactions.map((tx) => {
+                {paginatedTransactions.map((tx) => {
                   const isDebit = tx.type === 'debit'
                   return (
                     <tr key={tx.reference_id || `${tx.type}-${tx.id}`}>
@@ -641,6 +685,94 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
             </p>
           )}
         </div>
+
+        {/* Pagination Bar */}
+        {filteredTransactions.length > 0 && (
+          <div className="sheet-pagination-bar">
+            <div className="sheet-pagination-info">
+              <span>
+                Showing <strong>{startItem}</strong>–<strong>{endItem}</strong> of <strong>{filteredTransactions.length}</strong> transactions
+              </span>
+              <div className="sheet-page-size-selector">
+                <span>Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    const val = e.target.value === 'all' ? 'all' : Number(e.target.value)
+                    setPageSize(val)
+                  }}
+                  className="filter-select sheet-page-size-select"
+                  aria-label="Rows per page"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && pageSize !== 'all' && (
+              <div className="sheet-pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  title="First Page"
+                >
+                  «
+                </button>
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  title="Previous Page"
+                >
+                  ‹ Prev
+                </button>
+
+                {pageNumbers.map((page, idx) =>
+                  page === '...' ? (
+                    <span key={`dots-${idx}`} className="pagination-ellipsis">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      type="button"
+                      className={`pagination-btn pagination-num ${currentPage === page ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  title="Next Page"
+                >
+                  Next ›
+                </button>
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  title="Last Page"
+                >
+                  »
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </>
   )
