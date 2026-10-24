@@ -1400,14 +1400,14 @@ function App() {
 
           <div className="detail-stats">
             <div><span>Estimated Cost</span><strong>{selectedProject.estimated_cost === '' ? 'Not Estimated' : money(selectedProject.estimated_cost)}</strong></div>
-            <div><span>Amount Received</span><strong>{money(projectReceived)}</strong></div>
             {selectedProject.estimated_cost === '' ? (
-              <div><span>Balance Due</span><strong>N/A</strong></div>
+              <div><span>Balance Due</span><strong className="balance-due-value" style={{ color: '#d94343' }}>N/A</strong></div>
             ) : (
-              <div><span>Balance Due</span><strong>{money(Math.max(0, Number(selectedProject.estimated_cost) - projectReceived))}</strong></div>
+              <div><span>Balance Due</span><strong className="balance-due-value" style={{ color: '#d94343' }}>{money(Math.max(0, Number(selectedProject.estimated_cost) - projectReceived))}</strong></div>
             )}
+            <div><span>Amount Received</span><strong>{money(projectReceived)}</strong></div>
             <div>
-              <span>{selectedContractor === 'all' ? 'Contractor Payments' : `Contractor Payment (${selectedContractor})`}</span>
+              <span>{selectedContractor === 'all' ? 'Total Expenses' : `Total Expenses (${selectedContractor})`}</span>
               <strong>{money(filteredContractorSpend)}</strong>
             </div>
           </div>
