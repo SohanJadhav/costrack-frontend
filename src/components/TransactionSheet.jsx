@@ -165,6 +165,7 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
       if (q) {
         const matchProject = (t.project_name || '').toLowerCase().includes(q)
         const matchContractor = (t.contractor_name || '').toLowerCase().includes(q)
+        const matchTitle = (t.title || '').toLowerCase().includes(q)
         const matchDesc = (t.description || '').toLowerCase().includes(q)
         const matchAccount = (t.firm_account_name || '').toLowerCase().includes(q)
         const matchMode = (t.payment_mode || '').toLowerCase().includes(q)
@@ -172,6 +173,7 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
         return (
           matchProject ||
           matchContractor ||
+          matchTitle ||
           matchDesc ||
           matchAccount ||
           matchMode ||
@@ -274,7 +276,7 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
         typeLabel,
         item.project_name || '',
         party,
-        item.description || '',
+        item.title ? (item.description && item.description !== 'Payment received' ? `${item.title} — ${item.description}` : item.title) : (item.description || ''),
         item.firm_account_name || '',
         formatPaymentMode(item.payment_mode),
         debit,
@@ -640,8 +642,17 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
                           <span>Client Installment</span>
                         )}
                       </td>
-                      <td className="cell-description" title={tx.description || ''}>
-                        <span className="truncate-text">{tx.description || '—'}</span>
+                      <td className="cell-description" title={tx.title ? (tx.description && tx.description !== 'Payment received' ? `${tx.title} — ${tx.description}` : tx.title) : (tx.description || '')}>
+                        <span className="truncate-text">
+                          {tx.title ? (
+                            <>
+                              <strong style={{ fontWeight: 600 }}>{tx.title}</strong>
+                              {tx.description && tx.description !== 'Payment received' ? ` — ${tx.description}` : ''}
+                            </>
+                          ) : (
+                            tx.description || '—'
+                          )}
+                        </span>
                       </td>
                       <td>{tx.firm_account_name || '—'}</td>
                       <td>{formatPaymentMode(tx.payment_mode)}</td>

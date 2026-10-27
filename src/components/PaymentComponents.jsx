@@ -1,6 +1,6 @@
 import Modal from './Modal'
 
-export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
+export function PaymentList({ payments, onEditPayment, onDeletePayment, isSearching = false }) {
   const entries = Array.isArray(payments) ? payments.slice().reverse() : []
 
   return <div className="payment-list">
@@ -13,12 +13,23 @@ export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
       const modeLabel = formatModeName(mode)
       const firmName = payment.firmAccountName || payment.firm_account_name || payment.firmAccount?.name || payment.firm_account?.name || ''
 
+      const title = payment.title || ''
+      const description = payment.note || payment.description || ''
+      const hasTitle = Boolean(title.trim())
+      const mainHeading = hasTitle ? title : (description || 'Payment received')
+      const subHeading = hasTitle ? description : ''
+
       return <div className="payment-row" key={payment.id}>
         <span className="payment-date-badge" aria-hidden="true">₹</span>
         <span className="payment-copy">
-          <strong className="truncate-description" title={payment.note || payment.description || 'Payment received'}>
-            {payment.note || payment.description || 'Payment received'}
+          <strong className="truncate-description" title={mainHeading}>
+            {mainHeading}
           </strong>
+          {subHeading ? (
+            <span className="payment-desc truncate-description" title={subHeading}>
+              {subHeading}
+            </span>
+          ) : null}
           <small>{formattedDate}<span className="payment-meta-separator">·</span>{modeLabel}{firmName ? <><span className="payment-meta-separator">·</span>{firmName}</> : null}</small>
         </span>
         <strong className="payment-amount">{money(payment.amount)}</strong>
@@ -60,7 +71,13 @@ export function PaymentList({ payments, onEditPayment, onDeletePayment }) {
           )}
         </div>
       </div>
-    }) : <div className="payment-empty"><span className="payment-empty-icon">+</span><strong>No payments received yet</strong><small>Owner installments will appear here.</small></div>}
+    }) : (
+      <div className="payment-empty">
+        <span className="payment-empty-icon">{isSearching ? '🔍' : '+'}</span>
+        <strong>{isSearching ? 'No matching received payments' : 'No payments received yet'}</strong>
+        <small>{isSearching ? 'Try searching with a different title, description, or amount.' : 'Owner installments will appear here.'}</small>
+      </div>
+    )}
   </div>
 }
 
@@ -78,6 +95,19 @@ export function PaymentForm({ projectName, form, setForm, onSubmit, close, isEdi
       <p className="modal-intro">
         {isEdit ? "Update details of this installment received from the owner." : "Record an installment received from the project owner."}
       </p>
+
+      <label>
+        Title *
+        <input
+          type="text"
+          required
+          value={form.title || ''}
+          onChange={(event) =>
+            setForm({ ...form, title: event.target.value })
+          }
+          placeholder="e.g. Booking Advance, Slab Completion"
+        />
+      </label>
 
       <label>
         Amount received *

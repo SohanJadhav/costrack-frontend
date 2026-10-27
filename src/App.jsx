@@ -71,6 +71,7 @@ function normalizePayment(item, contractorId) {
     projectId: item.project_id ?? item.projectId ?? item.ProjectID,
     paymentType: item.payment_type || item.paymentType || 'contractor',
     amount: Number(item.amount || item.Amount || 0),
+    title: item.title || item.Title || '',
     note: item.notes || item.description || item.note || item.Description || 'Payment received',
     description: item.description || item.notes || item.note || item.Description || 'Payment received',
     date: String(dateValue).slice(0, 10),
@@ -213,6 +214,7 @@ function App() {
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [selectedContractor, setSelectedContractor] = useState('all')
   const [projectSearch, setProjectSearch] = useState('')
+  const [paymentSearch, setPaymentSearch] = useState('')
   const [modal, setModal] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -221,7 +223,7 @@ function App() {
   const [newContractorForm, setNewContractorForm] = useState({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
   const [firmAccountForm, setFirmAccountForm] = useState({ name: '', description: '', status: 'active' })
   const [expenseForm, setExpenseForm] = useState({ contractorId: '', amount: '', description: '' })
-  const [paymentForm, setPaymentForm] = useState({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
+  const [paymentForm, setPaymentForm] = useState({ title: '', amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isBackingUp, setIsBackingUp] = useState(false)
@@ -400,6 +402,7 @@ function App() {
     if (selectedProjectId) {
       loadProjectDetails(selectedProjectId)
       setSelectedContractor('all')
+      setPaymentSearch('')
     }
   }, [selectedProjectId])
 
@@ -476,6 +479,18 @@ function App() {
         (p.owner_name || '').toLowerCase().includes(q)
     )
   }, [projects, projectSearch])
+
+  const filteredProjectPayments = useMemo(() => {
+    const q = paymentSearch.trim().toLowerCase()
+    if (!q) return projectPayments
+    const cleanNum = q.replace(/[,₹\s]/g, '')
+    return projectPayments.filter((payment) => {
+      const matchTitle = (payment.title || '').toLowerCase().includes(q)
+      const matchDesc = (payment.description || payment.note || '').toLowerCase().includes(q)
+      const matchAmount = cleanNum ? String(payment.amount || '').includes(cleanNum) : false
+      return matchTitle || matchDesc || matchAmount
+    })
+  }, [projectPayments, paymentSearch])
 
   async function fetchLatestPayments() {
     if (!selectedProject) return null
@@ -559,11 +574,22 @@ function App() {
         return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
       }
 
-      const incomingEntries = [...latestOwnerPayments]
+      const baseOwnerPayments = paymentSearch.trim()
+        ? latestOwnerPayments.filter((payment) => {
+            const q = paymentSearch.trim().toLowerCase()
+            const cleanNum = q.replace(/[,₹\s]/g, '')
+            const matchTitle = (payment.title || '').toLowerCase().includes(q)
+            const matchDesc = (payment.description || payment.note || '').toLowerCase().includes(q)
+            const matchAmount = cleanNum ? String(payment.amount || '').includes(cleanNum) : false
+            return matchTitle || matchDesc || matchAmount
+          })
+        : latestOwnerPayments
+
+      const incomingEntries = [...baseOwnerPayments]
         .sort((a, b) => new Date(b.date || b.payment_date || today) - new Date(a.date || a.payment_date || today))
         .map((payment) => ({
           date: payment.date || payment.payment_date || today,
-          description: payment.description || payment.note || 'Payment received',
+          description: payment.title ? `${payment.title}${payment.description && payment.description !== 'Payment received' ? ` — ${payment.description}` : ''}` : (payment.description || payment.note || 'Payment received'),
           account: payment.firmAccountName || payment.firm_account_name || payment.firmAccount?.name || '—',
           mode: payment.paymentMode || payment.payment_mode || 'cash',
           amount: Number(payment.amount || 0),
@@ -865,10 +891,11 @@ function App() {
 
   async function addPayment(event) {
     event.preventDefault()
-    if (!selectedProject || !paymentForm.amount) return
+    if (!selectedProject || !paymentForm.amount || !paymentForm.title.trim()) return
 
     try {
       const payload = {
+        title: paymentForm.title.trim(),
         amount: Number(paymentForm.amount || 0),
         firm_account_id: paymentForm.firmAccountId ? Number(paymentForm.firmAccountId) : null,
         payment_date: new Date(paymentForm.date).toISOString(),
@@ -889,7 +916,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to save payment')
       }
 
-      setPaymentForm({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
+      setPaymentForm({ title: '', amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
       setError('')
       await loadProjectDetails(selectedProject.id)
@@ -1074,6 +1101,7 @@ function App() {
     if (!payment) return
     setPaymentForm({
       id: payment.id,
+      title: payment.title || '',
       amount: String(payment.amount || ''),
       firmAccountId: payment.firmAccountId ?? payment.firm_account_id ?? '',
       date: payment.date || payment.payment_date || today,
@@ -1085,10 +1113,11 @@ function App() {
 
   async function updatePayment(event) {
     event.preventDefault()
-    if (!paymentForm.id || !paymentForm.amount) return
+    if (!paymentForm.id || !paymentForm.amount || !paymentForm.title.trim()) return
 
     try {
       const payload = {
+        title: paymentForm.title.trim(),
         amount: Number(paymentForm.amount || 0),
         firm_account_id: paymentForm.firmAccountId ? Number(paymentForm.firmAccountId) : null,
         payment_date: new Date(paymentForm.date).toISOString(),
@@ -1109,7 +1138,7 @@ function App() {
         throw new Error(errorBody.error?.message || 'Unable to update payment')
       }
 
-      setPaymentForm({ amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
+      setPaymentForm({ title: '', amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
       setError('')
       const currentProjectId = selectedProjectId || selectedProject?.id
@@ -1438,18 +1467,27 @@ function App() {
 
           <div className="section-head expense-heading">
             <div>
-              <h3>Received payments <span className="count">{projectPayments.length}</span></h3>
+              <h3>Received payments <span className="count">{filteredProjectPayments.length}</span></h3>
               <p>Installments received from the client</p>
             </div>
             <div className="section-actions">
+              <input
+                className="dir-search"
+                type="search"
+                placeholder="Search payments…"
+                value={paymentSearch}
+                onChange={(e) => setPaymentSearch(e.target.value)}
+                aria-label="Search received payments by amount, title, or description"
+              />
               <button type="button" className="outline-button" onClick={exportOwnerReport}>Export PDF</button>
               {canManageOwnerPayments && (
-                <button type="button" className="outline-button" onClick={() => setModal('payment')}>+ Add payment</button>
+                <button type="button" className="outline-button" onClick={() => { setPaymentForm({ title: '', amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' }); setModal('payment') }}>+ Add payment</button>
               )}
             </div>
           </div>
           <PaymentList
-            payments={projectPayments}
+            payments={filteredProjectPayments}
+            isSearching={Boolean(paymentSearch.trim())}
             onEditPayment={canManageOwnerPayments ? (payment) => startEditPayment(payment) : undefined}
             onDeletePayment={canManageOwnerPayments ? (payment) => setDeleteConfirm({ payment, type: 'project' }) : undefined}
           />
