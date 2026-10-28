@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function Login({ onLogin, error }) {
+export default function Login({ onLogin, error, isLoading = false }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -19,13 +19,15 @@ export default function Login({ onLogin, error }) {
         {error && <div className="error-banner">{error}</div>}
         <label>
           Username
-          <input required autoFocus value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+          <input required autoFocus value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" disabled={isLoading} />
         </label>
         <label>
           Password
-          <input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+          <input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" disabled={isLoading} />
         </label>
-        <button type="submit" className="primary-button full">Sign in</button>
+        <button type="submit" className="primary-button full" disabled={isLoading}>
+          {isLoading ? 'Signing in...' : 'Sign in'}
+        </button>
       </form>
     </main>
   )

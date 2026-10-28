@@ -115,3 +115,11 @@
 .profile-details { display: flex; flex-direction: column; min-width: 0; }
 .top-user-badge { display: inline-flex; align-items: center; gap: 8px; }
 
+/* Multi-Tenant Workspace Badges */
+.workspace-pill { background: #383731; border: 1px solid #48463e; border-radius: 6px; padding: 7px 11px; margin: 0 14px 22px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.workspace-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--coral); flex-shrink: 0; }
+.workspace-name { color: #fffdfa; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.2px; }
+.topbar-workspace-tag { display: inline-flex; align-items: center; gap: 5px; color: var(--coral); font-weight: 700; font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; margin-right: 8px; }
+.topbar-workspace-tag::after { content: "•"; color: #beb8ae; margin-left: 8px; }
+
+

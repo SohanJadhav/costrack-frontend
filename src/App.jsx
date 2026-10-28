@@ -8,10 +8,17 @@ import { FirmAccountDirectory, FirmAccountForm } from './components/FirmAccountC
 import { TransactionSheet } from './components/TransactionSheet'
 import { ConfirmModal, BackupModal } from './components/Modal'
 import Login from './components/Login'
-
-const API_BASE = (typeof window !== 'undefined' && window.location.port === '5173')
-  ? 'http://localhost:8080/api/v1'
-  : '/api/v1'
+import {
+  API_BASE,
+  api,
+  apiFetch,
+  authLogin,
+  clearStoredUser,
+  fetchMe,
+  getStoredUser,
+  setStoredUser,
+  subscribeUnauthorized,
+} from './api'
 const today = new Date().toISOString().slice(0, 10)
 
 function normalizeProject(project) {
@@ -192,17 +199,8 @@ function getRoleBadgeLabel(role) {
 }
 
 function App() {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('costtrack-user')
-      if (stored) return JSON.parse(stored)
-      const match = document.cookie.match(/costtrack_user=([^;]+)/)
-      if (match) return JSON.parse(decodeURIComponent(match[1]))
-    } catch {
-      return null
-    }
-    return null
-  })
+  const [user, setUser] = useState(() => getStoredUser())
+  const [isAuthLoading, setIsAuthLoading] = useState(false)
   const [projects, setProjects] = useState([])
   const [projectContractors, setProjectContractors] = useState([])
   const [contractors, setContractors] = useState([])
@@ -229,78 +227,99 @@ function App() {
   const [isBackingUp, setIsBackingUp] = useState(false)
   const [backupResult, setBackupResult] = useState(null)
 
+  function logout(sessionNotice = '') {
+    clearStoredUser()
+    setUser(null)
+    setProjects([])
+    setProjectContractors([])
+    setContractors([])
+    setFirmAccounts([])
+    setProjectPayments([])
+    setContractorPayments([])
+    setTotalSpend(0)
+    setSelectedProjectId(null)
+    setSelectedContractor('all')
+    setProjectSearch('')
+    setPaymentSearch('')
+    setModal(null)
+    setDeleteConfirm(null)
+    setError(sessionNotice)
+  }
+
+  // Subscribe to central 401 unauthorized notifications (e.g. token expired, account deactivated)
+  useEffect(() => {
+    const unsubscribe = subscribeUnauthorized((reason) => {
+      logout(reason || 'Session expired. Please sign in again.')
+    })
+    return unsubscribe
+  }, [])
+
   async function triggerBackup() {
     setIsBackingUp(true)
     setBackupResult(null)
     setModal('backup')
     try {
-      const response = await fetch(`${API_BASE}/backup/drive`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const data = await api.post('/backup/drive', {})
+      setBackupResult({
+        success: true,
+        ...data,
       })
-      const data = await response.json()
-      if (!response.ok) {
-        setBackupResult({
-          success: false,
-          error: data.error?.message || 'Google Drive backup failed. Please check credentials configuration.',
-        })
-      } else {
-        setBackupResult({
-          success: true,
-          ...data,
-        })
-      }
     } catch (err) {
       setBackupResult({
         success: false,
-        error: err.message || 'Network error occurred while uploading backup',
+        error: err.message || 'Google Drive backup failed. Please check credentials configuration.',
       })
     } finally {
       setIsBackingUp(false)
     }
   }
 
-  function downloadBackupDirectly() {
-    window.open(`${API_BASE}/backup/download`, '_blank')
-  }
-
-  async function login(credentials) {
+  async function downloadBackupDirectly() {
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error?.message || 'Unable to sign in')
-      localStorage.setItem('costtrack-user', JSON.stringify(data))
-      document.cookie = `costtrack_user=${encodeURIComponent(JSON.stringify(data))}; path=/; max-age=604800`
-      setUser(data)
-      setError('')
-    } catch (loginError) {
-      setError(loginError.message)
+      const res = await apiFetch('/backup/download')
+      if (!res.ok) {
+        throw new Error(`Download failed with status ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `costtrack-backup-${new Date().toISOString().slice(0, 10)}.db`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err.message || 'Failed to download backup')
     }
   }
 
-  function logout() {
-    localStorage.removeItem('costtrack-user')
-    document.cookie = 'costtrack_user=; path=/; max-age=0'
-    setUser(null)
+  async function login(credentials) {
+    setIsAuthLoading(true)
     setError('')
+    try {
+      const data = await authLogin(credentials)
+      setUser(data)
+    } catch (loginError) {
+      setError(loginError.message)
+    } finally {
+      setIsAuthLoading(false)
+    }
   }
 
+  // Refresh profile details (/users/me) on authenticated mount
   useEffect(() => {
     if (!user?.id) return
-    fetch(`${API_BASE}/users/${user.id}`)
-      .then((res) => {
-        if (res.ok) return res.json()
-        return null
-      })
+    fetchMe()
       .then((userData) => {
-        if (userData && (userData.role !== user.role || userData.name !== user.name)) {
+        if (userData && (
+          userData.role !== user.role ||
+          userData.name !== user.name ||
+          userData.client_name !== user.client_name ||
+          userData.client_id !== user.client_id
+        )) {
           const updated = { ...user, ...userData }
-          localStorage.setItem('costtrack-user', JSON.stringify(updated))
-          document.cookie = `costtrack_user=${encodeURIComponent(JSON.stringify(updated))}; path=/; max-age=604800`
+          setStoredUser(updated)
           setUser(updated)
         }
       })
@@ -310,11 +329,8 @@ function App() {
 
   async function loadTotalSpend() {
     try {
-      const response = await fetch(`${API_BASE}/payments/total-spend`)
-      if (response.ok) {
-        const data = await response.json()
-        setTotalSpend(Number(data.total_spend || 0))
-      }
+      const data = await api.get('/payments/total-spend')
+      setTotalSpend(Number(data?.total_spend || 0))
     } catch {
       // ignore
     }
@@ -322,9 +338,7 @@ function App() {
 
   async function loadProjects() {
     try {
-      const response = await fetch(`${API_BASE}/projects`)
-      if (!response.ok) throw new Error('Projects could not be loaded')
-      const data = await response.json()
+      const data = await api.get('/projects')
       const formatted = (data || []).map(normalizeProject)
       setProjects(formatted)
       if (!selectedProjectId && formatted[0]) {
@@ -339,9 +353,7 @@ function App() {
 
   async function loadContractors() {
     try {
-      const response = await fetch(`${API_BASE}/contractors`)
-      if (!response.ok) throw new Error('Contractors could not be loaded')
-      const data = await response.json()
+      const data = await api.get('/contractors')
       setContractors(Array.isArray(data) ? data : [])
     } catch (loadError) {
       setError(loadError.message)
@@ -350,9 +362,7 @@ function App() {
 
   async function loadFirmAccounts() {
     try {
-      const response = await fetch(`${API_BASE}/firm-accounts`)
-      if (!response.ok) throw new Error('Firm accounts could not be loaded')
-      const data = await response.json()
+      const data = await api.get('/firm-accounts')
       setFirmAccounts(Array.isArray(data) ? data : [])
     } catch (loadError) {
       setError(loadError.message)
@@ -363,24 +373,16 @@ function App() {
     if (!projectId) return
 
     try {
-      const summaryResponse = await fetch(`${API_BASE}/projects/${projectId}/summary`)
-      if (!summaryResponse.ok) throw new Error('Project details could not be loaded')
-      const summary = await summaryResponse.json()
+      const summary = await api.get(`/projects/${projectId}/summary`)
       const contractors = (summary.contractors || []).map(normalizeContractorSummary)
       setProjectContractors(contractors)
 
-      const paymentsResponse = await fetch(`${API_BASE}/projects/${projectId}/payments`)
-      if (!paymentsResponse.ok) throw new Error('Project payments could not be loaded')
-      const payments = await paymentsResponse.json()
+      const payments = await api.get(`/projects/${projectId}/payments`)
       setProjectPayments((payments || []).map(normalizePayment))
 
       const contractorPaymentResponses = await Promise.all(
         contractors.map(async (contractor) => {
-          const response = await fetch(`${API_BASE}/projects/${projectId}/contractors/${contractor.contractor_id}/payments`)
-          if (!response.ok) {
-            throw new Error(`Payments for ${contractor.contractor_name} could not be loaded`)
-          }
-          const summary = await response.json()
+          const summary = await api.get(`/projects/${projectId}/contractors/${contractor.contractor_id}/payments`)
           return (summary.payments || []).map((payment) => normalizePayment(payment, contractor.contractor_id))
         }),
       )
@@ -494,18 +496,15 @@ function App() {
 
   async function fetchLatestPayments() {
     if (!selectedProject) return null
-    const [ownerPaymentsResponse, contractorPaymentResponses] = await Promise.all([
-      fetch(`${API_BASE}/projects/${selectedProject.id}/payments`),
+    const [ownerPayments, contractorPaymentSummaries] = await Promise.all([
+      api.get(`/projects/${selectedProject.id}/payments`),
       Promise.all(projectContractors.map(async (contractor) => {
-        const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractor.contractor_id}/payments`)
-        if (!response.ok) throw new Error(`Payments for ${contractor.contractor_name} could not be loaded`)
-        const summary = await response.json()
+        const summary = await api.get(`/projects/${selectedProject.id}/contractors/${contractor.contractor_id}/payments`)
         return (summary.payments || []).map((payment) => normalizePayment(payment, contractor.contractor_id))
       })),
     ])
-    if (!ownerPaymentsResponse.ok) throw new Error('Owner payments could not be loaded')
-    const latestOwnerPayments = (await ownerPaymentsResponse.json()).map(normalizePayment)
-    const latestContractorPayments = contractorPaymentResponses.flat()
+    const latestOwnerPayments = (ownerPayments || []).map(normalizePayment)
+    const latestContractorPayments = contractorPaymentSummaries.flat()
     setProjectPayments(latestOwnerPayments)
     setContractorPayments(latestContractorPayments)
     return { latestOwnerPayments, latestContractorPayments }
@@ -801,18 +800,7 @@ function App() {
         start_date: projectForm.start_date ? new Date(projectForm.start_date).toISOString() : new Date().toISOString(),
       }
 
-      const response = await fetch(`${API_BASE}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to create project' } }))
-        throw new Error(errorBody.error?.message || 'Unable to create project')
-      }
-
-      const createdProject = await response.json()
+      const createdProject = await api.post('/projects', payload)
       const normalized = normalizeProject(createdProject)
       setProjects((current) => [normalized, ...current])
       setSelectedProjectId(normalized.id)
@@ -828,22 +816,13 @@ function App() {
     event.preventDefault()
     if (!selectedProject || !contractorForm.contractorId || !contractorForm.amount || !contractorForm.description.trim()) return
     try {
-      const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/contractors/${contractorForm.contractorId}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: Number(contractorForm.amount || 0),
-          firm_account_id: contractorForm.firmAccountId ? Number(contractorForm.firmAccountId) : null,
-          payment_date: new Date(contractorForm.date).toISOString(),
-          description: contractorForm.description.trim() || 'Contractor payment',
-          payment_mode: contractorForm.paymentMode || 'cash',
-        }),
+      await api.post(`/projects/${selectedProject.id}/contractors/${contractorForm.contractorId}/payments`, {
+        amount: Number(contractorForm.amount || 0),
+        firm_account_id: contractorForm.firmAccountId ? Number(contractorForm.firmAccountId) : null,
+        payment_date: new Date(contractorForm.date).toISOString(),
+        description: contractorForm.description.trim() || 'Contractor payment',
+        payment_mode: contractorForm.paymentMode || 'cash',
       })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to save contractor payment' } }))
-        throw new Error(errorBody.error?.message || 'Unable to save contractor payment')
-      }
 
       setContractorForm({ contractorId: '', firmAccountId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
       setModal(null)
@@ -862,22 +841,13 @@ function App() {
     if (!newContractorForm.name.trim()) return
 
     try {
-      const response = await fetch(`${API_BASE}/contractors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newContractorForm.name.trim(),
-          firm_name: newContractorForm.firm_name.trim(),
-          phone_number: newContractorForm.phone_number.trim(),
-          firm_address: newContractorForm.firm_address.trim(),
-          description: newContractorForm.description.trim(),
-        }),
+      await api.post('/contractors', {
+        name: newContractorForm.name.trim(),
+        firm_name: newContractorForm.firm_name.trim(),
+        phone_number: newContractorForm.phone_number.trim(),
+        firm_address: newContractorForm.firm_address.trim(),
+        description: newContractorForm.description.trim(),
       })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to create contractor' } }))
-        throw new Error(errorBody.error?.message || 'Unable to create contractor')
-      }
 
       setNewContractorForm({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
       await loadContractors()
@@ -905,16 +875,7 @@ function App() {
         notes: paymentForm.note.trim() || 'Payment received',
       }
 
-      const response = await fetch(`${API_BASE}/projects/${selectedProject.id}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: { message: 'Unable to save payment' } }))
-        throw new Error(errorBody.error?.message || 'Unable to save payment')
-      }
+      await api.post(`/projects/${selectedProject.id}/payments`, payload)
 
       setPaymentForm({ title: '', amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
@@ -955,18 +916,7 @@ function App() {
         start_date: projectForm.start_date ? new Date(projectForm.start_date).toISOString() : new Date().toISOString(),
       }
 
-      const response = await fetch(`${API_BASE}/projects/${projectForm.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || 'Unable to update project')
-      }
-
-      const updated = await response.json()
+      const updated = await api.put(`/projects/${projectForm.id}`, payload)
       const normalized = normalizeProject(updated)
       setProjects((current) => current.map((p) => (p.id === normalized.id ? normalized : p)))
       setProjectForm({ name: '', owner_name: '', phone_number: '', address: '', estimated_cost: '', description: '', start_date: today })
@@ -996,22 +946,13 @@ function App() {
     if (!newContractorForm.id || !newContractorForm.name.trim()) return
 
     try {
-      const response = await fetch(`${API_BASE}/contractors/${newContractorForm.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newContractorForm.name.trim(),
-          firm_name: newContractorForm.firm_name.trim(),
-          phone_number: newContractorForm.phone_number.trim(),
-          firm_address: newContractorForm.firm_address.trim(),
-          description: newContractorForm.description.trim(),
-        }),
+      await api.put(`/contractors/${newContractorForm.id}`, {
+        name: newContractorForm.name.trim(),
+        firm_name: newContractorForm.firm_name.trim(),
+        phone_number: newContractorForm.phone_number.trim(),
+        firm_address: newContractorForm.firm_address.trim(),
+        description: newContractorForm.description.trim(),
       })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || 'Unable to update contractor')
-      }
 
       setNewContractorForm({ name: '', firm_name: '', phone_number: '', firm_address: '', description: '' })
       await loadContractors()
@@ -1028,20 +969,11 @@ function App() {
     if (!firmAccountForm.name.trim()) return
 
     try {
-      const response = await fetch(`${API_BASE}/firm-accounts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: firmAccountForm.name.trim(),
-          description: firmAccountForm.description.trim(),
-          status: firmAccountForm.status || 'active',
-        }),
+      await api.post('/firm-accounts', {
+        name: firmAccountForm.name.trim(),
+        description: firmAccountForm.description.trim(),
+        status: firmAccountForm.status || 'active',
       })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || 'Unable to create firm account')
-      }
 
       setFirmAccountForm({ name: '', description: '', status: 'active' })
       await loadFirmAccounts()
@@ -1068,20 +1000,11 @@ function App() {
     if (!firmAccountForm.id || !firmAccountForm.name.trim()) return
 
     try {
-      const response = await fetch(`${API_BASE}/firm-accounts/${firmAccountForm.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: firmAccountForm.name.trim(),
-          description: firmAccountForm.description.trim(),
-          status: firmAccountForm.status || 'active',
-        }),
+      await api.put(`/firm-accounts/${firmAccountForm.id}`, {
+        name: firmAccountForm.name.trim(),
+        description: firmAccountForm.description.trim(),
+        status: firmAccountForm.status || 'active',
       })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || 'Unable to update firm account')
-      }
 
       setFirmAccountForm({ name: '', description: '', status: 'active' })
       await loadFirmAccounts()
@@ -1127,16 +1050,7 @@ function App() {
         notes: paymentForm.note.trim() || 'Payment received',
       }
 
-      const response = await fetch(`${API_BASE}/project-payments/${paymentForm.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || 'Unable to update payment')
-      }
+      await api.put(`/project-payments/${paymentForm.id}`, payload)
 
       setPaymentForm({ title: '', amount: '', firmAccountId: '', date: today, paymentMode: 'cash', note: '' })
       setModal(null)
@@ -1168,23 +1082,14 @@ function App() {
     if (!contractorForm.id || !contractorForm.amount || !contractorForm.contractorId) return
 
     try {
-      const response = await fetch(`${API_BASE}/contractor-payments/${contractorForm.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractor_id: Number(contractorForm.contractorId),
-          firm_account_id: contractorForm.firmAccountId ? Number(contractorForm.firmAccountId) : null,
-          amount: Number(contractorForm.amount || 0),
-          payment_date: new Date(contractorForm.date).toISOString(),
-          description: contractorForm.description.trim() || 'Contractor payment',
-          payment_mode: contractorForm.paymentMode || 'cash',
-        }),
+      await api.put(`/contractor-payments/${contractorForm.id}`, {
+        contractor_id: Number(contractorForm.contractorId),
+        firm_account_id: contractorForm.firmAccountId ? Number(contractorForm.firmAccountId) : null,
+        amount: Number(contractorForm.amount || 0),
+        payment_date: new Date(contractorForm.date).toISOString(),
+        description: contractorForm.description.trim() || 'Contractor payment',
+        payment_mode: contractorForm.paymentMode || 'cash',
       })
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || 'Unable to update contractor payment')
-      }
 
       setContractorForm({ contractorId: '', firmAccountId: '', amount: '', date: today, paymentMode: 'cash', description: '' })
       setModal(null)
@@ -1210,16 +1115,7 @@ function App() {
 
       setIsDeleting(true)
       try {
-        const response = await fetch(`${API_BASE}/firm-accounts/${accountId}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-        })
-
-        if (!response.ok && response.status !== 204) {
-          const errorBody = await response.json().catch(() => ({}))
-          throw new Error(errorBody.error?.message || `Unable to delete firm account (status ${response.status})`)
-        }
-
+        await api.delete(`/firm-accounts/${accountId}`)
         setDeleteConfirm(null)
         setError('')
         await loadFirmAccounts()
@@ -1244,19 +1140,11 @@ function App() {
 
     setIsDeleting(true)
     try {
-      const url = type === 'project'
-        ? `${API_BASE}/project-payments/${paymentId}`
-        : `${API_BASE}/contractor-payments/${paymentId}`
+      const path = type === 'project'
+        ? `/project-payments/${paymentId}`
+        : `/contractor-payments/${paymentId}`
 
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      if (!response.ok && response.status !== 204) {
-        const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.error?.message || `Unable to delete payment (status ${response.status})`)
-      }
+      await api.delete(path)
 
       setDeleteConfirm(null)
       setError('')
@@ -1275,19 +1163,25 @@ function App() {
     }
   }
 
-  if (!user) return <Login onLogin={login} error={error} />
+  if (!user) return <Login onLogin={login} error={error} isLoading={isAuthLoading} />
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">$</span><span>costrack</span></div>
-      <div className="side-label">Workspace</div>
+      {user.client_name && (
+        <div className="workspace-pill" title={`Workspace: ${user.client_name}`}>
+          <span className="workspace-dot" />
+          <span className="workspace-name">{user.client_name}</span>
+        </div>
+      )}
+      <div className="side-label">Navigation</div>
       <button type="button" className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} onClick={() => setActiveView('overview')}><span>◈</span>Overview</button>
       <button type="button" className={`nav-item ${activeView === 'projects' ? 'active' : ''}`} onClick={() => { setActiveView('projects'); setModal(null) }}><span>▦</span>Projects {canManageProjects && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'contractors' ? 'active' : ''}`} onClick={() => { setActiveView('contractors'); setModal(null) }}><span>♧</span>Contractors  {canManageContractors && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'firm-accounts' ? 'active' : ''}`} onClick={() => { setActiveView('firm-accounts'); setModal(null) }}><span>🏛</span>Firm Accounts {canManageFirmAccounts && <b>+</b>}</button>
       <button type="button" className={`nav-item ${activeView === 'sheet' ? 'active' : ''}`} onClick={() => { setActiveView('sheet'); setModal(null) }}><span>▤</span>Complete Sheet</button>
       <div className="sidebar-bottom">
-        <div className="side-label">Your workspace</div>
+        <div className="side-label">{user.client_name || 'Your workspace'}</div>
         <div className="profile">
           <span className="avatar dark">{(user.name || 'U').slice(0, 2).toUpperCase()}</span>
           <span className="profile-details">
@@ -1303,7 +1197,10 @@ function App() {
     <main className="main-content">
       <header className="topbar">
         <div>
-          <span className="eyebrow"><LiveIndianTime /></span>
+          <span className="eyebrow">
+            {user.client_name && <span className="topbar-workspace-tag">{user.client_name}</span>}
+            <LiveIndianTime />
+          </span>
           <h1>{getIndianGreeting()}, {user.name} <span>✦</span></h1>
         </div>
         <div className="top-actions">
@@ -1340,7 +1237,7 @@ function App() {
           <button
             type="button"
             className="logout-button"
-            onClick={logout}
+            onClick={() => logout()}
           >
             Log out
           </button>

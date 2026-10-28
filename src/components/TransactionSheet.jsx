@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import './TransactionSheet.css'
+import { apiFetch } from '../api'
 
 function money(amount) {
   return new Intl.NumberFormat('en-IN', {
@@ -88,7 +89,11 @@ export function TransactionSheet({ apiBase = '/api/v1', projects = [], contracto
       if (endDate) params.set('end_date', endDate)
       if (sortOrder) params.set('order', sortOrder)
 
-      const response = await fetch(`${apiBase}/payments?${params.toString()}`)
+      const url = apiBase && apiBase !== '/api/v1'
+        ? `${apiBase}/payments?${params.toString()}`
+        : `/payments?${params.toString()}`
+
+      const response = await apiFetch(url)
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.error?.message || `Failed to fetch sheet data (${response.status})`)
